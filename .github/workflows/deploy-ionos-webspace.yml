@@ -16,15 +16,6 @@ jobs:
       - name: 🚚 Checkout Code
         uses: actions/checkout@v4
 
-      - name: 📁 Create Remote Directory
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: 22
-          script: mkdir -p /dist/shithead/
-
       - name: 🚀 Deploy to IONOS via SFTP
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
