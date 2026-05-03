@@ -45,6 +45,6 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps         # IONOS supports FTPS; for SFTP use a different action
           local-dir: ./public/
-          server-dir: ${{ secrets.FTP_DIR }}
+          server-dir: dist/shithead/
           # Don't blow away unrelated files in the same webspace
           dangerous-clean-slate: false
