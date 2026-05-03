@@ -1,16 +1,15 @@
 // ═══════════════════════════════════════════════════════
 //  Globals
 // ═══════════════════════════════════════════════════════
-let socket = null;
 let mode   = null;   // 'local' | 'online'
 
 // Local game state
-let LG = null;       // local game object
-let selectedCards = [];  // array of card objects currently selected
-let swapHandIdx = -1;    // index of selected hand card in swap phase
+let LG = null;
+let selectedCards = [];
+let swapHandIdx = -1;
 
 // Online game state
-let OG = null;       // last gameState received from server
+let OG = null;
 let myOnlineIndex = null;
 
 // Settings
@@ -45,10 +44,9 @@ function showScreen(id) {
 function makeCardEl(card, opts = {}) {
   const el = document.createElement('div');
   el.className = 'card' + (isRed(card) ? ' red' : ' black') + (opts.small ? ' card-sm' : '');
-  if (opts.selected) el.classList.add('selected');
+  if (opts.selected)   el.classList.add('selected');
   if (opts.unplayable) el.classList.add('unplayable');
   el.dataset.id = card.id;
-
   el.innerHTML = `<span class="rank-tl">${card.rank}</span>
     <span class="suit-tl">${card.suit}</span>
     <span class="center-suit">${card.suit}</span>
@@ -66,7 +64,6 @@ function makeBackEl(opts = {}) {
 }
 
 // Render the human's tableau (face-up cards cascading over face-down cards).
-// faceDownLen can be a number (online) or array length (local).
 function renderHumanStacks(faceDownLen, faceUp, opt) {
   const zone = document.getElementById('human-stacks');
   if (!zone) return;
@@ -80,9 +77,7 @@ function renderHumanStacks(faceDownLen, faceUp, opt) {
       const playable = opt.isMyTurn && opt.phase === 'faceDown';
       const fdEl = makeBackEl({ playable });
       fdEl.classList.add('stack-facedown');
-      if (playable && opt.onFaceDownClick) {
-        fdEl.onclick = () => opt.onFaceDownClick(i);
-      }
+      if (playable && opt.onFaceDownClick) fdEl.onclick = () => opt.onFaceDownClick(i);
       stack.appendChild(fdEl);
     }
 
@@ -96,17 +91,14 @@ function renderHumanStacks(faceDownLen, faceUp, opt) {
         unplayable: opt.isMyTurn && opt.phase === 'faceUp' && !canPlay
       });
       fuEl.classList.add('stack-faceup');
-      if (canPlay && opt.onFaceUpClick) {
-        fuEl.onclick = () => opt.onFaceUpClick(card);
-      }
+      if (canPlay && opt.onFaceUpClick) fuEl.onclick = () => opt.onFaceUpClick(card);
       stack.appendChild(fuEl);
     }
     zone.appendChild(stack);
   }
 }
 
-// Build a slot for one opponent. faceDownLen + faceUp + handCount come from
-// the appropriate source (local: arrays, online: counts).
+// Build a slot for one opponent.
 const MAX_VISIBLE_HAND_BACKS = 5;
 function buildOpponentSlot(player, isCurrentTurn, faceDownLen, faceUp, handCount) {
   const slot = document.createElement('div');
@@ -122,7 +114,6 @@ function buildOpponentSlot(player, isCurrentTurn, faceDownLen, faceUp, handCount
   const rows = document.createElement('div');
   rows.className = 'opp-rows';
 
-  // Mini cascading stacks (face-up over face-down)
   const numStacks = Math.max(faceDownLen, faceUp.length);
   if (numStacks > 0) {
     const tabRow = document.createElement('div');
@@ -145,25 +136,19 @@ function buildOpponentSlot(player, isCurrentTurn, faceDownLen, faceUp, handCount
     rows.appendChild(tabRow);
   }
 
-  // Opponent hand: overlapping backs (capped visually) + count badge
   if (handCount > 0) {
     const handRow = document.createElement('div');
     handRow.className = 'opp-hand-row';
-
     const fan = document.createElement('div');
     fan.className = 'opp-hand-fan';
     const visible = Math.min(handCount, MAX_VISIBLE_HAND_BACKS);
-    for (let i = 0; i < visible; i++) {
-      fan.appendChild(makeBackEl({ small: true }));
-    }
+    for (let i = 0; i < visible; i++) fan.appendChild(makeBackEl({ small: true }));
     handRow.appendChild(fan);
-
     const countEl = document.createElement('div');
     countEl.className = 'opp-hand-count';
     countEl.textContent = handCount;
     countEl.title = `${handCount} card${handCount === 1 ? '' : 's'} in hand`;
     handRow.appendChild(countEl);
-
     rows.appendChild(handRow);
   }
 
@@ -181,17 +166,15 @@ function renderPile(pile) {
     zone.appendChild(emp);
   } else {
     // Fan: newest card leftmost (highest z-index), older cards peek to the RIGHT
-    // showing only their right border (right edge with rotated rank/suit).
     const peek = parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue('--pile-peek')
     ) || 16;
     const show = pile.slice(-3);
     show.forEach((card, i) => {
       const el = makeCardEl(card);
-      // i=0 oldest → rightmost; i=show.length-1 newest → leftmost (pos=0)
-      const pos = show.length - 1 - i;   // 0 = newest/top
+      const pos = show.length - 1 - i; // 0 = newest/top
       el.style.left   = `${pos * peek}px`;
-      el.style.zIndex = show.length - pos; // newest = highest z
+      el.style.zIndex = show.length - pos;
       zone.appendChild(el);
     });
   }
@@ -201,9 +184,7 @@ function renderPile(pile) {
 // ═══════════════════════════════════════════════════════
 //  LOCAL GAME  – state helpers
 // ═══════════════════════════════════════════════════════
-function localPlayerPhase(p) {
-  return getPlayerPhase(p);
-}
+function localPlayerPhase(p) { return getPlayerPhase(p); }
 
 function localDraw(playerIdx) {
   const p = LG.players[playerIdx];
@@ -234,34 +215,23 @@ function localAdvanceTurn(fromIdx) {
   LG.currentPlayer = advanceTurnBy(LG.players, fromIdx, 1, LG.direction);
 }
 
-// Centralized turn-handling after a play. Mirrors the server's applyTurnChange.
-// Returns true if the same player goes again.
 function applyLocalTurnChange(playerIdx, res) {
   const p = LG.players[playerIdx];
 
   if (res.reverseDirection) {
     LG.direction = -LG.direction;
-    toast(`🔄 Direction reversed!`);
+    toast('Direction reversed!');
   }
 
-  if (res.extraTurn && !p.finished) {
-    return true;
-  }
+  if (res.extraTurn && !p.finished) return true;
 
   if (res.skipCount > 0) {
     const next = applySkipAdvance(LG.players, playerIdx, res.skipCount, LG.direction);
-    if (next === playerIdx && p.finished) {
-      // Finished player can't take an extra turn from skip — advance normally
-      localAdvanceTurn(playerIdx);
-      return false;
-    }
-    if (next === playerIdx) {
-      toast('⏭️ All opponents skipped — extra turn!');
-      return true;
-    }
+    if (next === playerIdx && p.finished) { localAdvanceTurn(playerIdx); return false; }
+    if (next === playerIdx) { toast('All opponents skipped — extra turn!'); return true; }
     const numActive = LG.players.filter(q => !q.finished).length;
     const skipped = Math.min(res.skipCount, numActive - 1);
-    toast(`⏭️ ${skipped} player${skipped > 1 ? 's' : ''} skipped!`);
+    toast(`${skipped} player${skipped > 1 ? 's' : ''} skipped!`);
     LG.currentPlayer = next;
     return false;
   }
@@ -270,20 +240,14 @@ function applyLocalTurnChange(playerIdx, res) {
   return false;
 }
 
-// Apply a validated play to local game state.
-// Returns the resolvePlay() result so caller can act on extraTurn / skips.
 function localApplyPlay(playerIdx, cards) {
   const p = LG.players[playerIdx];
   const phase = localPlayerPhase(p);
   const ids = new Set(cards.map(c => c.id));
 
-  if (phase === 'hand') {
-    p.hand = p.hand.filter(c => !ids.has(c.id));
-  } else if (phase === 'faceUp') {
-    p.faceUp = p.faceUp.filter(c => !ids.has(c.id));
-  } else if (phase === 'faceDown') {
-    p.faceDown = p.faceDown.filter(c => !ids.has(c.id));
-  }
+  if (phase === 'hand')        p.hand   = p.hand.filter(c => !ids.has(c.id));
+  else if (phase === 'faceUp') p.faceUp = p.faceUp.filter(c => !ids.has(c.id));
+  else if (phase === 'faceDown') p.faceDown = p.faceDown.filter(c => !ids.has(c.id));
 
   const res = resolvePlay(cards, LG.pile, LG.sevenActive);
   LG.pile        = res.newPile;
@@ -365,74 +329,61 @@ function scheduleTurn() {
 function renderLocalGame() {
   if (!LG) return;
 
-  const human     = LG.players[0];
-  const isMyTurn  = LG.currentPlayer === 0 && !human.finished;
+  const human      = LG.players[0];
+  const isMyTurn   = LG.currentPlayer === 0 && !human.finished;
   const humanPhase = localPlayerPhase(human);
 
-  // Header
   document.getElementById('game-status-bar').textContent = (() => {
     if (LG.phase === 'ended') return 'Game Over';
     const cur = LG.players[LG.currentPlayer];
-    if (LG.currentPlayer === 0) return '▶ Your turn!';
+    if (LG.currentPlayer === 0) return 'Your turn!';
     return `${cur.name}'s turn…`;
   })();
-  document.getElementById('deck-num').textContent = LG.deck.length;
-  document.getElementById('deck-count').textContent = LG.deck.length;
+  document.getElementById('deck-num').textContent    = LG.deck.length;
+  document.getElementById('deck-count').textContent  = LG.deck.length;
   document.getElementById('seven-warning').classList.toggle('hidden', !LG.sevenActive);
   const dirEl = document.getElementById('direction-indicator');
   if (dirEl) dirEl.textContent = LG.direction === 1 ? '↻' : '↺';
 
-  // Pile
   renderPile(LG.pile);
 
-  // Human name tag
   const nameTag = document.getElementById('human-name');
   nameTag.textContent = human.name;
   nameTag.classList.toggle('is-turn', isMyTurn);
 
-  // Human tableau — face-up cards cascading over face-down
   renderHumanStacks(human.faceDown.length, human.faceUp, {
-    isMyTurn,
-    phase: humanPhase,
-    pile: LG.pile,
-    sevenActive: LG.sevenActive,
+    isMyTurn, phase: humanPhase, pile: LG.pile, sevenActive: LG.sevenActive,
     onFaceDownClick: i => humanPlayFaceDown(i),
-    onFaceUpClick: card => toggleSelectCard(card, 'faceUp')
+    onFaceUpClick:   card => toggleSelectCard(card, 'faceUp')
   });
 
-  // Human hand
   const handZone = document.getElementById('human-hand');
   handZone.innerHTML = '';
   human.hand.forEach(card => {
     const canPlay = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, LG.pile, LG.sevenActive);
     const sel = selectedCards.some(c => c.id === card.id);
     const el = makeCardEl(card, { selected: sel, unplayable: isMyTurn && humanPhase === 'hand' && !canPlay });
-    if (isMyTurn && humanPhase === 'hand') {
-      el.onclick = () => toggleSelectCard(card, 'hand');
-    }
+    if (isMyTurn && humanPhase === 'hand') el.onclick = () => toggleSelectCard(card, 'hand');
     handZone.appendChild(el);
   });
 
-  // Action buttons
   const btnPlay   = document.getElementById('btn-play-selected');
   const btnPickup = document.getElementById('btn-pickup');
   const canShowActions = isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp');
   btnPlay.classList.toggle('hidden', !canShowActions || selectedCards.length === 0);
   btnPickup.classList.toggle('hidden', !canShowActions || LG.pile.length === 0);
 
-  // Opponents
-  renderOpponents(LG.players, LG.currentPlayer, false /* local, not online */);
+  renderOpponents(LG.players, LG.currentPlayer, false);
 }
 
 function renderOpponents(players, currentPlayerIdx, isOnline) {
   const area = document.getElementById('opponents-area');
   area.innerHTML = '';
-  const startIdx = isOnline ? 0 : 1; // in local mode, player 0 is human shown separately
-  for (let i = startIdx; i < players.length; i++) {
+  for (let i = isOnline ? 0 : 1; i < players.length; i++) {
     if (!isOnline && i === 0) continue;
     const p = players[i];
-    const fdLen = isOnline ? p.faceDownCount : p.faceDown.length;
-    const fuArr = p.faceUp || [];
+    const fdLen  = isOnline ? p.faceDownCount : p.faceDown.length;
+    const fuArr  = p.faceUp || [];
     const hCount = isOnline ? p.handCount : p.hand.length;
     area.appendChild(buildOpponentSlot(p, i === currentPlayerIdx, fdLen, fuArr, hCount));
   }
@@ -450,7 +401,6 @@ function toggleSelectCard(card, source) {
   if (idx >= 0) {
     selectedCards.splice(idx, 1);
   } else {
-    // Deselect if different rank
     if (selectedCards.length > 0 && selectedCards[0].rank !== card.rank) selectedCards = [];
     selectedCards.push(card);
   }
@@ -478,7 +428,7 @@ function humanPlayFaceDown(faceDownIdx) {
     localCheckFinished(0);
     localCheckGameOver();
     if (LG.phase !== 'ended') {
-      if (res.burned) toast('🔥 Pile burned — extra turn!');
+      if (res.burned) toast('Pile burned — extra turn!');
       applyLocalTurnChange(0, res);
     }
   }
@@ -487,36 +437,6 @@ function humanPlayFaceDown(faceDownIdx) {
   if (LG.phase === 'ended') showGameOver();
   else scheduleTurn();
 }
-
-document.getElementById('btn-play-selected').onclick = () => {
-  if (!LG || !selectedCards.length) return;
-  const p = LG.players[0];
-  const phase = localPlayerPhase(p);
-  if (LG.currentPlayer !== 0 || !['hand','faceUp'].includes(phase)) return;
-  if (!isCardPlayable(selectedCards[0], LG.pile, LG.sevenActive)) { toast('Cannot play those cards'); return; }
-
-  const res = localApplyPlay(0, selectedCards);
-  selectedCards = [];
-  localCheckGameOver();
-  if (LG.phase !== 'ended') {
-    if (res.burned) toast('🔥 Pile burned — extra turn!');
-    applyLocalTurnChange(0, res);
-  }
-  renderLocalGame();
-  if (LG.phase === 'ended') showGameOver();
-  else scheduleTurn();
-};
-
-document.getElementById('btn-pickup').onclick = () => {
-  if (LG.currentPlayer !== 0) return;
-  localPickup(0);
-  selectedCards = [];
-  localAdvanceTurn(0);
-  localCheckGameOver();
-  renderLocalGame();
-  if (LG.phase === 'ended') showGameOver();
-  else scheduleTurn();
-};
 
 // ═══════════════════════════════════════════════════════
 //  SWAP PHASE  (local)
@@ -528,7 +448,7 @@ function renderSwap(hand, faceUp) {
   hZone.innerHTML  = '';
 
   faceUp.forEach((card, i) => {
-    const el = makeCardEl(card, { selected: false });
+    const el = makeCardEl(card);
     el.onclick = () => {
       if (swapHandIdx < 0) { toast('Select a hand card first'); return; }
       const tmp = hand[swapHandIdx];
@@ -543,10 +463,7 @@ function renderSwap(hand, faceUp) {
   hand.forEach((card, i) => {
     const sel = (swapHandIdx === i);
     const el = makeCardEl(card, { selected: sel });
-    el.onclick = () => {
-      swapHandIdx = (swapHandIdx === i) ? -1 : i;
-      renderSwap(hand, faceUp);
-    };
+    el.onclick = () => { swapHandIdx = (swapHandIdx === i) ? -1 : i; renderSwap(hand, faceUp); };
     hZone.appendChild(el);
   });
 }
@@ -554,39 +471,15 @@ function renderSwap(hand, faceUp) {
 function startLocalSwap() {
   const human = LG.players[0];
   swapHandIdx = -1;
-
-  // Bots do their swap instantly
   for (let i = 1; i < LG.players.length; i++) {
     const bot = LG.players[i];
     const swapped = botSwap(bot.hand, bot.faceUp);
     bot.hand   = swapped.hand;
     bot.faceUp = swapped.faceUp;
   }
-
   showScreen('screen-swap');
   renderSwap(human.hand, human.faceUp);
 }
-
-document.getElementById('btn-swap-ready').onclick = () => {
-  if (mode === 'local') {
-    // Confirm human swap (hand/faceUp were mutated in place already)
-    LG.phase = 'play';
-    LG.currentPlayer = findFirstPlayer(LG.players);
-    selectedCards = [];
-    showScreen('screen-game');
-    renderLocalGame();
-    scheduleTurn();
-  } else if (mode === 'online') {
-    // Send final arrangement to server
-    const fuZone = document.getElementById('swap-faceup');
-    const hZone  = document.getElementById('swap-hand');
-    const hand   = [...hZone.querySelectorAll('.card')].map(el => OG._swapHand.find(c => c.id == el.dataset.id)).filter(Boolean);
-    const faceUp = [...fuZone.querySelectorAll('.card')].map(el => OG._swapFaceUp.find(c => c.id == el.dataset.id)).filter(Boolean);
-    socket.emit('readyToPlay', { hand: OG._swapHand, faceUp: OG._swapFaceUp });
-    document.getElementById('btn-swap-ready').disabled = true;
-    document.getElementById('swap-status').textContent = 'Waiting for other players…';
-  }
-};
 
 // ═══════════════════════════════════════════════════════
 //  START LOCAL GAME
@@ -595,19 +488,12 @@ function startLocalGame() {
   const name    = document.getElementById('local-name').value.trim() || 'Player';
   useSevenRule  = document.getElementById('rule-seven').checked;
   const numBots = parseInt(document.querySelector('#bot-count-btns .btn-toggle.active').dataset.n);
-  const botNames = ['🤖 Bot A','🤖 Bot B','🤖 Bot C','🤖 Bot D'];
-
+  const botNames = ['Bot A', 'Bot B', 'Bot C', 'Bot D'];
   const dealt = dealGame(1 + numBots);
 
   LG = {
-    phase: 'swap',
-    currentPlayer: 0,
-    sevenActive: false,
-    direction: 1,
-    deck: dealt.remainingDeck,
-    pile: [],
-    loserIndex: null,
-    finishCounter: 1,
+    phase: 'swap', currentPlayer: 0, sevenActive: false, direction: 1,
+    deck: dealt.remainingDeck, pile: [], loserIndex: null, finishCounter: 1,
     players: [
       { name, isBot: false, finished: false, finishOrder: null,
         hand: dealt.players[0].hand, faceUp: dealt.players[0].faceUp, faceDown: dealt.players[0].faceDown },
@@ -626,117 +512,322 @@ function startLocalGame() {
 //  GAME OVER
 // ═══════════════════════════════════════════════════════
 function showGameOver() {
-  const players = mode === 'local' ? LG.players : (OG ? OG.players : []);
+  const players  = mode === 'local' ? LG.players : (OG ? OG.players : []);
   const loserIdx = mode === 'local' ? LG.loserIndex : (OG ? OG.loserIndex : null);
-
-  const loser = loserIdx != null ? players[loserIdx] : null;
+  const loser    = loserIdx != null ? players[loserIdx] : null;
   const isHumanLoser = mode === 'local' ? loserIdx === 0 : loserIdx === myOnlineIndex;
 
-  document.getElementById('gameover-emoji').textContent  = isHumanLoser ? '💩' : '🎉';
-  document.getElementById('gameover-title').textContent  = isHumanLoser ? 'You are the Shithead!' : 'Game Over!';
+  document.getElementById('gameover-emoji').textContent  = isHumanLoser ? '♣' : '♠';
+  document.getElementById('gameover-title').textContent  = isHumanLoser ? 'You are the Shithead!' : 'Game Over';
   document.getElementById('gameover-result').innerHTML   = loser
-    ? `<strong>${escHtml(loser.name)}</strong> is the 💩 <em>Shithead</em>`
+    ? `<strong>${escHtml(loser.name)}</strong> is the Shithead`
     : 'No result';
 
-  const ordered = [...players].filter(p => p.finishOrder != null).sort((a,b) => a.finishOrder - b.finishOrder);
+  const ordered = [...players].filter(p => p.finishOrder != null)
+    .sort((a, b) => a.finishOrder - b.finishOrder);
   document.getElementById('finish-order-list').innerHTML =
-    ordered.map((p,i) => `${['🥇','🥈','🥉'][i] || (i+1)+'.'} ${escHtml(p.name)}`).join('<br>') +
-    (loser ? `<br>💩 ${escHtml(loser.name)} — Shithead` : '');
+    ordered.map((p, i) => `${['1st','2nd','3rd'][i] || (i+1)+'th'} — ${escHtml(p.name)}`).join('<br>') +
+    (loser ? `<br>Shithead — ${escHtml(loser.name)}` : '');
 
   showScreen('screen-gameover');
 }
 
 // ═══════════════════════════════════════════════════════
-//  ONLINE MODE  – socket.io
+//  ONLINE MODE  – Firebase Firestore
 // ═══════════════════════════════════════════════════════
-function connectSocket() {
-  if (socket && socket.connected) return;
-  if (typeof io === 'undefined') {
-    toast('⚠ Multiplayer server not available in this build', 5000);
-    return;
+let currentRoomCode  = null;
+let roomUnsubscribe  = null;
+let _swapShown       = false;
+
+function fbReady() {
+  if (!window.db) {
+    toast('Firebase not configured — check firebase-config.js', 5000);
+    return false;
   }
-  socket = io({ timeout: 8000 });
-
-  socket.on('connect_error', () => {
-    toast('⚠ Cannot reach multiplayer server', 5000);
-    const status = document.getElementById('lobby-status');
-    if (status) status.textContent = 'Server unavailable — try again later.';
-  });
-  socket.on('connect', () => console.log('socket connected'));
-  socket.on('error', ({ msg }) => toast('⚠ ' + msg));
-
-  socket.on('roomCreated', ({ code, playerIndex }) => {
-    myOnlineIndex = playerIndex;
-    document.getElementById('room-code-display').textContent = code;
-    document.getElementById('online-join-panel').classList.add('hidden');
-    document.getElementById('online-lobby-panel').classList.remove('hidden');
-    document.getElementById('btn-start-online').classList.remove('hidden');
-  });
-
-  socket.on('roomJoined', ({ playerIndex }) => {
-    myOnlineIndex = playerIndex;
-    document.getElementById('online-join-panel').classList.add('hidden');
-    document.getElementById('online-lobby-panel').classList.remove('hidden');
-  });
-
-  socket.on('lobbyState', ({ code, players, isHost }) => {
-    document.getElementById('room-code-display').textContent = code;
-    const list = document.getElementById('lobby-player-list');
-    list.innerHTML = players.map((p, i) =>
-      `<div class="lobby-player${i===0?' host':''}">${escHtml(p.name)}</div>`
-    ).join('');
-    document.getElementById('lobby-status').textContent =
-      `${players.length}/5 players — ${players.length < 2 ? 'Need at least 2 to start' : 'Ready to start!'}`;
-    const btnStart = document.getElementById('btn-start-online');
-    btnStart.classList.toggle('hidden', !isHost);
-    if (isHost) btnStart.disabled = players.length < 2;
-  });
-
-  socket.on('playerReady', ({ name, readyCount, total }) => {
-    document.getElementById('swap-status').textContent = `${readyCount}/${total} ready…`;
-  });
-
-  socket.on('swapPhase', ({ hand, faceUp, playerIndex, totalPlayers }) => {
-    mode = 'online';
-    myOnlineIndex = playerIndex;
-    if (!OG) OG = {};
-    OG._swapHand   = hand;
-    OG._swapFaceUp = faceUp;
-    swapHandIdx = -1;
-    showScreen('screen-swap');
-    document.getElementById('btn-swap-ready').disabled = false;
-    document.getElementById('swap-status').textContent = '';
-    // Render swap with mutable copies
-    OG._swapHand   = [...hand];
-    OG._swapFaceUp = [...faceUp];
-    renderOnlineSwap();
-  });
-
-  socket.on('gameState', (state) => {
-    OG = state;
-    if (state.phase === 'play' || state.phase === 'ended') {
-      if (document.getElementById('screen-swap').classList.contains('active') ||
-          document.getElementById('screen-online').classList.contains('active')) {
-        showScreen('screen-game');
-      }
-      renderOnlineGame(state);
-      if (state.phase === 'ended') setTimeout(showGameOver, 800);
-    }
-  });
-
-  socket.on('playerDisconnected', ({ name }) => {
-    toast(`${name} disconnected — game ended`, 4000);
-  });
+  return true;
 }
 
-// Online swap uses OG._swapHand and OG._swapFaceUp mutated in place
+function genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+function roomRef(code) { return window.db.collection('rooms').doc(code); }
+
+function stopRoom() {
+  if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
+  currentRoomCode = null;
+  _swapShown = false;
+}
+
+// ─── Create / Join ─────────────────────────────────────
+
+async function createRoom(name) {
+  if (!fbReady()) return;
+  const code = genCode();
+  myOnlineIndex = 0;
+  currentRoomCode = code;
+  mode = 'online';
+  try {
+    await roomRef(code).set({
+      code, phase: 'lobby', hostIdx: 0,
+      players: [{ name, idx: 0, finished: false, finishOrder: null,
+                  swapReady: false, hand: [], faceUp: [], faceDown: [] }],
+      currentPlayerIndex: 0, direction: 1, sevenActive: false,
+      pile: [], deck: [], finishCounter: 1, loserIndex: null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    subscribeRoom(code);
+  } catch(e) { toast('Could not create room: ' + e.message); }
+}
+
+async function joinRoom(code, name) {
+  if (!fbReady()) return;
+  try {
+    const snap = await roomRef(code).get();
+    if (!snap.exists) { toast('Room not found'); return; }
+    const d = snap.data();
+    if (d.phase !== 'lobby') { toast('Game already started'); return; }
+    if (d.players.length >= 5) { toast('Room full (max 5)'); return; }
+    myOnlineIndex   = d.players.length;
+    currentRoomCode = code;
+    mode = 'online';
+    await roomRef(code).update({
+      players: [...d.players, { name, idx: myOnlineIndex, finished: false, finishOrder: null,
+                                swapReady: false, hand: [], faceUp: [], faceDown: [] }]
+    });
+    subscribeRoom(code);
+  } catch(e) { toast('Could not join room: ' + e.message); }
+}
+
+// ─── Real-time listener ────────────────────────────────
+
+function subscribeRoom(code) {
+  if (roomUnsubscribe) roomUnsubscribe();
+  roomUnsubscribe = roomRef(code).onSnapshot(snap => {
+    if (!snap.exists) return;
+    const s = snap.data();
+    OG = toRenderState(s);
+    onRoomUpdate(s);
+  }, err => toast('Connection error: ' + err.message, 4000));
+}
+
+function toRenderState(s) {
+  const me = (s.players || [])[myOnlineIndex] || {};
+  return {
+    ...s,
+    myIndex:      myOnlineIndex,
+    hand:         me.hand   || [],
+    faceDownCount: (me.faceDown || []).length,
+    deckCount:    (s.deck   || []).length,
+    players: (s.players || []).map(p => ({
+      ...p,
+      handCount:     (p.hand     || []).length,
+      faceDownCount: (p.faceDown || []).length,
+      faceUp:         p.faceUp   || []
+    }))
+  };
+}
+
+function onRoomUpdate(s) {
+  if (s.phase === 'lobby') {
+    document.getElementById('room-code-display').textContent = s.code;
+    document.getElementById('online-join-panel').classList.add('hidden');
+    document.getElementById('online-lobby-panel').classList.remove('hidden');
+    const list = document.getElementById('lobby-player-list');
+    list.innerHTML = s.players.map((p, i) =>
+      `<div class="lobby-player${i === 0 ? ' host' : ''}">${escHtml(p.name)}</div>`
+    ).join('');
+    document.getElementById('lobby-status').textContent =
+      `${s.players.length}/5 — ${s.players.length < 2 ? 'Waiting for players…' : 'Ready to start!'}`;
+    const btnStart = document.getElementById('btn-start-online');
+    btnStart.classList.toggle('hidden', myOnlineIndex !== 0);
+    if (myOnlineIndex === 0) btnStart.disabled = s.players.length < 2;
+
+  } else if (s.phase === 'swap') {
+    if (!_swapShown) {
+      _swapShown = true;
+      const me = s.players[myOnlineIndex];
+      if (!OG) OG = {};
+      OG._swapHand   = [...(me.hand   || [])];
+      OG._swapFaceUp = [...(me.faceUp || [])];
+      swapHandIdx = -1;
+      showScreen('screen-swap');
+      document.getElementById('btn-swap-ready').disabled = false;
+      document.getElementById('swap-status').textContent = '';
+      renderOnlineSwap();
+    }
+    const readyCount = s.players.filter(p => p.swapReady).length;
+    const statusEl = document.getElementById('swap-status');
+    if (statusEl && readyCount > 0 && document.getElementById('btn-swap-ready').disabled) {
+      statusEl.textContent = `${readyCount}/${s.players.length} ready…`;
+    }
+
+  } else if (s.phase === 'play' || s.phase === 'ended') {
+    if (!document.getElementById('screen-game').classList.contains('active')) showScreen('screen-game');
+    renderOnlineGame(OG);
+    if (s.phase === 'ended') setTimeout(showGameOver, 800);
+  }
+}
+
+// ─── Start game ────────────────────────────────────────
+
+async function startOnlineGame() {
+  if (!fbReady()) return;
+  try {
+    const snap = await roomRef(currentRoomCode).get();
+    const d    = snap.data();
+    if ((d.players || []).length < 2) { toast('Need at least 2 players'); return; }
+    const dealt = dealGame(d.players.length);
+    await roomRef(currentRoomCode).update({
+      phase: 'swap', deck: dealt.remainingDeck,
+      pile: [], sevenActive: false, direction: 1, finishCounter: 1, loserIndex: null,
+      players: d.players.map((p, i) => ({
+        ...p, swapReady: false, finished: false, finishOrder: null,
+        hand:     dealt.players[i].hand,
+        faceUp:   dealt.players[i].faceUp,
+        faceDown: dealt.players[i].faceDown
+      }))
+    });
+  } catch(e) { toast('Could not start game: ' + e.message); }
+}
+
+// ─── Swap ready ────────────────────────────────────────
+
+async function submitSwap() {
+  document.getElementById('btn-swap-ready').disabled = true;
+  document.getElementById('swap-status').textContent = 'Waiting for others…';
+  try {
+    await window.db.runTransaction(async t => {
+      const snap    = await t.get(roomRef(currentRoomCode));
+      const s       = snap.data();
+      const players = s.players.map(p => ({ ...p }));
+      players[myOnlineIndex] = {
+        ...players[myOnlineIndex],
+        hand:      OG._swapHand   || players[myOnlineIndex].hand,
+        faceUp:    OG._swapFaceUp || players[myOnlineIndex].faceUp,
+        swapReady: true
+      };
+      const allReady   = players.every(p => p.swapReady);
+      const firstPlayer = allReady ? findFirstPlayer(players) : s.currentPlayerIndex;
+      t.update(roomRef(currentRoomCode), {
+        players,
+        ...(allReady ? { phase: 'play', currentPlayerIndex: firstPlayer } : {})
+      });
+    });
+  } catch(e) {
+    toast('Error: ' + e.message);
+    document.getElementById('btn-swap-ready').disabled = false;
+  }
+}
+
+// ─── Turn helpers ──────────────────────────────────────
+
+function onlineNextIdx(players, fromIdx, res, direction) {
+  const dir = res.reverseDirection ? -direction : direction;
+  if (res.extraTurn && !players[fromIdx].finished) return { idx: fromIdx, dir };
+  if (res.skipCount > 0) return { idx: applySkipAdvance(players, fromIdx, res.skipCount, dir), dir };
+  return { idx: advanceTurnBy(players, fromIdx, 1, dir), dir };
+}
+
+// ─── Play cards ────────────────────────────────────────
+
+async function fbPlayCards(cards) {
+  try {
+    await window.db.runTransaction(async t => {
+      const snap = await t.get(roomRef(currentRoomCode));
+      const s    = snap.data();
+      if (s.currentPlayerIndex !== myOnlineIndex) return;
+      const players = s.players.map(p => ({
+        ...p, hand: [...p.hand], faceUp: [...p.faceUp], faceDown: [...p.faceDown]
+      }));
+      const me    = players[myOnlineIndex];
+      const phase = getPlayerPhase(me);
+      const ids   = new Set(cards.map(c => c.id));
+      if (!isCardPlayable(cards[0], s.pile, s.sevenActive)) return;
+      if (phase === 'hand')        me.hand   = me.hand.filter(c => !ids.has(c.id));
+      else if (phase === 'faceUp') me.faceUp = me.faceUp.filter(c => !ids.has(c.id));
+      const res  = resolvePlay(cards, s.pile, s.sevenActive);
+      const deck = [...(s.deck || [])];
+      if (phase === 'hand') while (me.hand.length < 3 && deck.length) me.hand.push(deck.pop());
+      let finishCounter = s.finishCounter || 1;
+      if (!me.finished && !me.hand.length && !me.faceUp.length && !me.faceDown.length) {
+        me.finished = true; me.finishOrder = finishCounter++;
+      }
+      const { idx, dir } = onlineNextIdx(players, myOnlineIndex, res, s.direction || 1);
+      const active = players.filter(p => !p.finished);
+      t.update(roomRef(currentRoomCode), {
+        players, pile: res.newPile, sevenActive: res.newSevenActive, deck,
+        direction: dir, currentPlayerIndex: idx, finishCounter,
+        phase:      active.length <= 1 ? 'ended' : s.phase,
+        loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
+      });
+    });
+  } catch(e) { toast('Move failed: ' + e.message); }
+  selectedCards = [];
+}
+
+async function fbPickup() {
+  try {
+    await window.db.runTransaction(async t => {
+      const snap = await t.get(roomRef(currentRoomCode));
+      const s    = snap.data();
+      if (s.currentPlayerIndex !== myOnlineIndex) return;
+      const players = s.players.map(p => ({ ...p, hand: [...p.hand] }));
+      players[myOnlineIndex].hand = [...players[myOnlineIndex].hand, ...(s.pile || [])];
+      const idx = advanceTurnBy(players, myOnlineIndex, 1, s.direction || 1);
+      t.update(roomRef(currentRoomCode), { players, pile: [], sevenActive: false, currentPlayerIndex: idx });
+    });
+  } catch(e) { toast('Pick up failed: ' + e.message); }
+  selectedCards = [];
+}
+
+async function fbPlayFaceDown(index) {
+  try {
+    await window.db.runTransaction(async t => {
+      const snap = await t.get(roomRef(currentRoomCode));
+      const s    = snap.data();
+      if (s.currentPlayerIndex !== myOnlineIndex) return;
+      const players = s.players.map(p => ({
+        ...p, hand: [...p.hand], faceUp: [...p.faceUp], faceDown: [...p.faceDown]
+      }));
+      const me   = players[myOnlineIndex];
+      const card = me.faceDown.splice(index, 1)[0];
+      let pile = s.pile || [], sevenActive = s.sevenActive, dir = s.direction || 1, idx;
+      let res = { reverseDirection: false, extraTurn: false, skipCount: 0, newSevenActive: false };
+      if (!isCardPlayable(card, pile, sevenActive)) {
+        me.hand = [...me.hand, card, ...pile];
+        pile = []; sevenActive = false;
+        idx  = advanceTurnBy(players, myOnlineIndex, 1, dir);
+      } else {
+        res  = resolvePlay([card], pile, sevenActive);
+        pile = res.newPile; sevenActive = res.newSevenActive;
+        const next = onlineNextIdx(players, myOnlineIndex, res, dir);
+        idx = next.idx; dir = next.dir;
+      }
+      let finishCounter = s.finishCounter || 1;
+      if (!me.finished && !me.hand.length && !me.faceUp.length && !me.faceDown.length) {
+        me.finished = true; me.finishOrder = finishCounter++;
+      }
+      const active = players.filter(p => !p.finished);
+      t.update(roomRef(currentRoomCode), {
+        players, pile, sevenActive, direction: dir, currentPlayerIndex: idx, finishCounter,
+        phase:      active.length <= 1 ? 'ended' : s.phase,
+        loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
+      });
+    });
+  } catch(e) { toast('Move failed: ' + e.message); }
+}
+
+// ─── Online swap rendering ─────────────────────────────
+
 function renderOnlineSwap() {
   const fuZone = document.getElementById('swap-faceup');
   const hZone  = document.getElementById('swap-hand');
   fuZone.innerHTML = '';
   hZone.innerHTML  = '';
 
-  OG._swapFaceUp.forEach((card, i) => {
+  (OG._swapFaceUp || []).forEach((card, i) => {
     const el = makeCardEl(card);
     el.onclick = () => {
       if (swapHandIdx < 0) { toast('Select a hand card first'); return; }
@@ -749,17 +840,15 @@ function renderOnlineSwap() {
     fuZone.appendChild(el);
   });
 
-  OG._swapHand.forEach((card, i) => {
+  (OG._swapHand || []).forEach((card, i) => {
     const el = makeCardEl(card, { selected: swapHandIdx === i });
-    el.onclick = () => {
-      swapHandIdx = (swapHandIdx === i) ? -1 : i;
-      renderOnlineSwap();
-    };
+    el.onclick = () => { swapHandIdx = (swapHandIdx === i) ? -1 : i; renderOnlineSwap(); };
     hZone.appendChild(el);
   });
 }
 
-// Override swap ready for online
+// ─── Swap ready button ─────────────────────────────────
+
 document.getElementById('btn-swap-ready').onclick = function () {
   if (mode === 'local') {
     LG.phase = 'play';
@@ -769,28 +858,27 @@ document.getElementById('btn-swap-ready').onclick = function () {
     renderLocalGame();
     scheduleTurn();
   } else if (mode === 'online') {
-    socket.emit('readyToPlay', { hand: OG._swapHand, faceUp: OG._swapFaceUp });
-    this.disabled = true;
-    document.getElementById('swap-status').textContent = 'Waiting for other players…';
+    submitSwap();
   }
 };
 
-// ─── Online game rendering ───────────────────────────
+// ─── Online game rendering ─────────────────────────────
+
 function renderOnlineGame(state) {
   if (!state) return;
-  const me = state.players[state.myIndex];
+  const me       = state.players[state.myIndex];
   const isMyTurn = state.currentPlayerIndex === state.myIndex;
   const humanPhase = me.finished ? 'done' :
-    (state.hand.length > 0 ? 'hand' :
-     (me.faceUp.length > 0 ? 'faceUp' :
-      (state.faceDownCount > 0 ? 'faceDown' : 'done')));
+    (state.hand.length > 0      ? 'hand'     :
+     (me.faceUp.length > 0      ? 'faceUp'   :
+      (state.faceDownCount > 0  ? 'faceDown' : 'done')));
 
   document.getElementById('game-status-bar').textContent = (() => {
     if (state.phase === 'ended') return 'Game Over';
-    if (isMyTurn) return '▶ Your turn!';
+    if (isMyTurn) return 'Your turn!';
     return `${escHtml(state.players[state.currentPlayerIndex].name)}'s turn…`;
   })();
-  document.getElementById('deck-num').textContent  = state.deckCount;
+  document.getElementById('deck-num').textContent   = state.deckCount;
   document.getElementById('deck-count').textContent = state.deckCount;
   document.getElementById('seven-warning').classList.toggle('hidden', !state.sevenActive);
   const dirEl = document.getElementById('direction-indicator');
@@ -798,48 +886,35 @@ function renderOnlineGame(state) {
 
   renderPile(state.pile);
 
-  // Human name
   const nameTag = document.getElementById('human-name');
   nameTag.textContent = me.name;
   nameTag.classList.toggle('is-turn', isMyTurn);
 
-  // Human tableau — face-up cards cascading over face-down
   renderHumanStacks(state.faceDownCount, me.faceUp, {
-    isMyTurn,
-    phase: humanPhase,
-    pile: state.pile,
-    sevenActive: state.sevenActive,
-    onFaceDownClick: i => socket.emit('gameAction', { type: 'playFaceDown', index: i }),
-    onFaceUpClick: card => onlineToggleSelect(card)
+    isMyTurn, phase: humanPhase, pile: state.pile, sevenActive: state.sevenActive,
+    onFaceDownClick: i => fbPlayFaceDown(i),
+    onFaceUpClick:   card => onlineToggleSelect(card)
   });
 
-  // Hand
   const handZone = document.getElementById('human-hand');
   handZone.innerHTML = '';
   state.hand.forEach(card => {
     const canPlay = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, state.pile, state.sevenActive);
     const sel = selectedCards.some(c => c.id === card.id);
     const el = makeCardEl(card, { selected: sel, unplayable: isMyTurn && humanPhase === 'hand' && !canPlay });
-    if (isMyTurn && humanPhase === 'hand') {
-      el.onclick = () => onlineToggleSelect(card);
-    }
+    if (isMyTurn && humanPhase === 'hand') el.onclick = () => onlineToggleSelect(card);
     handZone.appendChild(el);
   });
 
-  // Action buttons
   const canAct = isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp');
   document.getElementById('btn-play-selected').classList.toggle('hidden', !canAct || selectedCards.length === 0);
   document.getElementById('btn-pickup').classList.toggle('hidden', !canAct || state.pile.length === 0);
 
-  // Opponents (exclude self)
   const oArea = document.getElementById('opponents-area');
   oArea.innerHTML = '';
   state.players.forEach((p, i) => {
     if (i === state.myIndex) return;
-    oArea.appendChild(buildOpponentSlot(
-      p, i === state.currentPlayerIndex,
-      p.faceDownCount, p.faceUp, p.handCount
-    ));
+    oArea.appendChild(buildOpponentSlot(p, i === state.currentPlayerIndex, p.faceDownCount, p.faceUp, p.handCount));
   });
 }
 
@@ -854,17 +929,15 @@ function onlineToggleSelect(card) {
   renderOnlineGame(OG);
 }
 
-// Online play / pickup buttons
+// ─── Play / Pick-up buttons ────────────────────────────
+
 document.getElementById('btn-play-selected').onclick = function () {
   if (mode === 'online') {
     if (!selectedCards.length) return;
-    socket.emit('gameAction', { type: 'playCards', cards: selectedCards });
-    selectedCards = [];
+    fbPlayCards(selectedCards);
   } else {
-    // local – handled separately via the earlier onclick assignment above
-    // (but btn-play-selected can be reassigned; let's handle both here)
     if (!LG || !selectedCards.length) return;
-    const p = LG.players[0];
+    const p     = LG.players[0];
     const phase = localPlayerPhase(p);
     if (LG.currentPlayer !== 0 || !['hand','faceUp'].includes(phase)) return;
     if (!isCardPlayable(selectedCards[0], LG.pile, LG.sevenActive)) { toast('Cannot play those cards'); return; }
@@ -872,19 +945,17 @@ document.getElementById('btn-play-selected').onclick = function () {
     selectedCards = [];
     localCheckGameOver();
     if (LG.phase !== 'ended') {
-      if (res.burned) toast('🔥 Pile burned — extra turn!');
+      if (res.burned) toast('Pile burned — extra turn!');
       applyLocalTurnChange(0, res);
     }
     renderLocalGame();
-    if (LG.phase === 'ended') showGameOver();
-    else scheduleTurn();
+    if (LG.phase === 'ended') showGameOver(); else scheduleTurn();
   }
 };
 
 document.getElementById('btn-pickup').onclick = function () {
   if (mode === 'online') {
-    socket.emit('gameAction', { type: 'pickup' });
-    selectedCards = [];
+    fbPickup();
   } else {
     if (!LG) return;
     localPickup(0);
@@ -892,16 +963,15 @@ document.getElementById('btn-pickup').onclick = function () {
     localAdvanceTurn(0);
     localCheckGameOver();
     renderLocalGame();
-    if (LG.phase === 'ended') showGameOver();
-    else scheduleTurn();
+    if (LG.phase === 'ended') showGameOver(); else scheduleTurn();
   }
 };
 
 // ═══════════════════════════════════════════════════════
 //  Navigation / Menu events
 // ═══════════════════════════════════════════════════════
-document.getElementById('btn-vs-bots').onclick  = () => showScreen('screen-local-setup');
-document.getElementById('btn-online').onclick   = () => { connectSocket(); showScreen('screen-online'); };
+document.getElementById('btn-vs-bots').onclick     = () => showScreen('screen-local-setup');
+document.getElementById('btn-online').onclick      = () => showScreen('screen-online');
 document.getElementById('btn-local-back').onclick  = () => showScreen('screen-menu');
 document.getElementById('btn-online-back').onclick = () => showScreen('screen-menu');
 document.getElementById('btn-local-start').onclick = () => startLocalGame();
@@ -915,29 +985,29 @@ document.querySelectorAll('#bot-count-btns .btn-toggle').forEach(btn => {
 
 document.getElementById('btn-create-room').onclick = () => {
   const name = document.getElementById('online-name').value.trim() || 'Player';
-  socket.emit('createRoom', { name });
+  createRoom(name);
 };
 
 document.getElementById('btn-join-room').onclick = () => {
   const name = document.getElementById('online-name').value.trim() || 'Player';
   const code = document.getElementById('room-code-input').value.trim().toUpperCase();
   if (code.length !== 4) { toast('Enter a 4-character room code'); return; }
-  socket.emit('joinRoom', { code, name });
+  joinRoom(code, name);
 };
 
-document.getElementById('btn-start-online').onclick = () => socket.emit('startGame');
+document.getElementById('btn-start-online').onclick = () => startOnlineGame();
 
 document.getElementById('btn-leave-room').onclick = () => {
-  if (socket) socket.disconnect();
-  socket = null;
+  stopRoom();
+  OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
   document.getElementById('online-join-panel').classList.remove('hidden');
   document.getElementById('online-lobby-panel').classList.add('hidden');
   showScreen('screen-menu');
 };
 
 document.getElementById('btn-go-menu').onclick = () => {
-  LG = null; OG = null; selectedCards = []; mode = null;
-  if (socket) { socket.disconnect(); socket = null; }
+  LG = null; OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
+  stopRoom();
   showScreen('screen-menu');
 };
 
@@ -946,8 +1016,8 @@ document.getElementById('btn-go-again').onclick = () => {
     LG = null; selectedCards = [];
     showScreen('screen-local-setup');
   } else {
-    LG = null; OG = null; selectedCards = []; mode = null;
-    if (socket) { socket.disconnect(); socket = null; }
+    stopRoom();
+    LG = null; OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
     showScreen('screen-menu');
   }
 };
@@ -963,14 +1033,12 @@ document.getElementById('room-code-input').addEventListener('input', function ()
 document.getElementById('pile-zone').addEventListener('click', () => {
   const pile = mode === 'local' ? LG?.pile : OG?.pile;
   if (!pile || pile.length === 0) return;
-
   document.getElementById('pile-modal-count').textContent = pile.length;
   const cardsEl = document.getElementById('pile-modal-cards');
   cardsEl.innerHTML = '';
-  // Show newest first (top of pile first)
   [...pile].reverse().forEach(card => {
     const el = makeCardEl(card);
-    el.style.pointerEvents = 'none'; // non-interactive inside popup
+    el.style.pointerEvents = 'none';
     cardsEl.appendChild(el);
   });
   document.getElementById('pile-modal').classList.remove('hidden');
@@ -980,10 +1048,10 @@ document.getElementById('btn-close-pile').addEventListener('click', () => {
   document.getElementById('pile-modal').classList.add('hidden');
 });
 
-// Close on backdrop click or Escape key
 document.getElementById('pile-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) document.getElementById('pile-modal').classList.add('hidden');
 });
+
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.getElementById('pile-modal').classList.add('hidden');
 });

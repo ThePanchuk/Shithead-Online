@@ -128,27 +128,67 @@ a { color: #7ec88a; }
    Menu Card  (used by all non-game screens)
    ═══════════════════════════════════════════════════════ */
 .menu-card {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
+  background: linear-gradient(160deg, rgba(10,24,12,.96) 0%, rgba(18,34,20,.96) 100%);
+  border: 1px solid rgba(212,168,32,.22);
   border-radius: 18px;
   padding: 2.4rem 2.8rem;
   width: min(440px, 94vw);
   display: flex;
   flex-direction: column;
   gap: 1.4rem;
-  box-shadow: 0 10px 48px rgba(0,0,0,.65);
+  box-shadow: 0 12px 56px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.06);
   margin: 1rem;
 }
 
-.game-title  { font-size: 3rem; text-align: center; line-height: 1.1; }
-.subtitle    { text-align: center; color: #a8d4ad; margin-top: -.8rem; font-size: .95rem; }
+/* ── Title block ── */
+.title-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .45rem;
+}
+
+.title-suits {
+  font-size: .95rem;
+  letter-spacing: .15em;
+  color: rgba(212,168,32,.5);
+  user-select: none;
+}
+
+.game-title {
+  font-size: 2.9rem;
+  font-weight: 900;
+  letter-spacing: .22em;
+  text-align: center;
+  line-height: 1.05;
+  background: linear-gradient(160deg, #f0d060 0%, #d4a820 45%, #e8c840 75%, #b8880c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.title-rule {
+  width: 60%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,168,32,.45), transparent);
+  margin-top: .1rem;
+}
+
+.subtitle {
+  text-align: center;
+  color: #8aac8e;
+  font-size: .82rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
 .rules-link  { text-align: center; font-size: .85rem; }
 
 .menu-buttons { display: flex; flex-direction: column; gap: .8rem; }
 
 @media (max-width: 480px) {
   .menu-card { padding: 1.8rem 1.5rem; gap: 1.1rem; }
-  .game-title { font-size: 2.5rem; }
+  .game-title { font-size: 2.3rem; letter-spacing: .18em; }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -558,7 +598,7 @@ a { color: #7ec88a; }
 }
 
 @media (max-width: 480px) {
-  #table { border-width: 4px; margin: 4px; border-radius: 10px; }
+  #table { border-width: 0; margin: 0; border-radius: 0; }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -802,7 +842,7 @@ a { color: #7ec88a; }
    Game Over screen
    ═══════════════════════════════════════════════════════ */
 .gameover-card   { text-align: center; }
-.gameover-emoji  { font-size: 4rem; }
+.gameover-emoji  { font-size: 4rem; color: var(--gold); }
 .gameover-result { font-size: 1.1rem; line-height: 1.6; }
 .finish-order    { font-size: .9rem; color: #a8d4ad; line-height: 1.9; }
 
