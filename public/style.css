@@ -590,15 +590,11 @@ a { color: #7ec88a; }
   border: 8px solid var(--rail);
   box-shadow: inset 0 0 60px rgba(0,0,0,.4),
               0 0 0 3px var(--rail-hi);
-  border-radius: 14px;
-  margin: 6px;
+  border-radius: 0;   /* fills full screen on all devices */
+  margin: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-@media (max-width: 480px) {
-  #table { border-width: 0; margin: 0; border-radius: 0; }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -699,7 +695,7 @@ a { color: #7ec88a; }
   gap: 28px;
   padding: 8px;
 }
-#deck-zone, #pile-zone {
+#deck-zone, #pile-zone, #burned-zone {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -707,6 +703,17 @@ a { color: #7ec88a; }
 }
 #pile-zone { cursor: pointer; }
 #pile-zone:hover #pile-visual { filter: brightness(1.1); }
+
+/* Burned pile container — same size as a card */
+#burned-visual {
+  width: var(--card-w);
+  height: var(--card-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#burned-visual .card { cursor: default; }
+#burned-visual .card:hover { transform: none !important; }
 .zone-label-small { font-size: .7rem; color: rgba(255,255,255,.5); text-align: center; }
 
 /* Pile fan: newest card leftmost (z-index highest), older cards peek out to the right */
@@ -728,7 +735,7 @@ a { color: #7ec88a; }
 }
 
 @media (max-width: 480px) {
-  #center-area { gap: 18px; padding: 6px; }
+  #center-area { gap: 10px; padding: 6px; }
 }
 
 /* ═══════════════════════════════════════════════════════

@@ -181,6 +181,23 @@ function renderPile(pile) {
   document.getElementById('pile-count').textContent = pile ? pile.length : 0;
 }
 
+function renderBurnedPile(burnedPile) {
+  const zone = document.getElementById('burned-visual');
+  if (!zone) return;
+  const count = (burnedPile || []).length;
+  document.getElementById('burned-count').textContent = count;
+  zone.innerHTML = '';
+  if (count === 0) {
+    const emp = document.createElement('div');
+    emp.className = 'pile-empty';
+    emp.textContent = '–';
+    zone.appendChild(emp);
+  } else {
+    const back = makeBackEl({ count });
+    zone.appendChild(back);
+  }
+}
+
 // ═══════════════════════════════════════════════════════
 //  LOCAL GAME  – state helpers
 // ═══════════════════════════════════════════════════════
@@ -250,6 +267,7 @@ function localApplyPlay(playerIdx, cards) {
   else if (phase === 'faceDown') p.faceDown = p.faceDown.filter(c => !ids.has(c.id));
 
   const res = resolvePlay(cards, LG.pile, LG.sevenActive);
+  if (res.burned) LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, ...cards];
   LG.pile        = res.newPile;
   LG.sevenActive = useSevenRule ? res.newSevenActive : false;
 
@@ -296,6 +314,7 @@ function botTakeTurn(botIdx) {
       localAdvanceTurn(botIdx);
     } else {
       const res = resolvePlay([card], LG.pile, LG.sevenActive);
+      if (res.burned) LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
       LG.pile = res.newPile;
       LG.sevenActive = useSevenRule ? res.newSevenActive : false;
       localCheckFinished(botIdx);
@@ -346,6 +365,7 @@ function renderLocalGame() {
   if (dirEl) dirEl.textContent = LG.direction === 1 ? '↻' : '↺';
 
   renderPile(LG.pile);
+  renderBurnedPile(LG.burnedPile);
 
   const nameTag = document.getElementById('human-name');
   nameTag.textContent = human.name;
@@ -423,6 +443,7 @@ function humanPlayFaceDown(faceDownIdx) {
     localAdvanceTurn(0);
   } else {
     const res = resolvePlay([card], LG.pile, LG.sevenActive);
+    if (res.burned) LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
     LG.pile = res.newPile;
     LG.sevenActive = useSevenRule ? res.newSevenActive : false;
     localCheckFinished(0);
@@ -493,7 +514,7 @@ function startLocalGame() {
 
   LG = {
     phase: 'swap', currentPlayer: 0, sevenActive: false, direction: 1,
-    deck: dealt.remainingDeck, pile: [], loserIndex: null, finishCounter: 1,
+    deck: dealt.remainingDeck, pile: [], burnedPile: [], loserIndex: null, finishCounter: 1,
     players: [
       { name, isBot: false, finished: false, finishOrder: null,
         hand: dealt.players[0].hand, faceUp: dealt.players[0].faceUp, faceDown: dealt.players[0].faceDown },
@@ -574,8 +595,9 @@ async function createRoom(name) {
       players: [{ name, idx: 0, finished: false, finishOrder: null,
                   swapReady: false, hand: [], faceUp: [], faceDown: [] }],
       currentPlayerIndex: 0, direction: 1, sevenActive: false,
-      pile: [], deck: [], finishCounter: 1, loserIndex: null,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      pile: [], burnedPile: [], deck: [], finishCounter: 1, loserIndex: null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastActivity: firebase.firestore.FieldValue.serverTimestamp()
     });
     subscribeRoom(code);
   } catch(e) { toast('Could not create room: ' + e.message); }
@@ -594,7 +616,8 @@ async function joinRoom(code, name) {
     mode = 'online';
     await roomRef(code).update({
       players: [...d.players, { name, idx: myOnlineIndex, finished: false, finishOrder: null,
-                                swapReady: false, hand: [], faceUp: [], faceDown: [] }]
+                                swapReady: false, hand: [], faceUp: [], faceDown: [] }],
+      lastActivity: firebase.firestore.FieldValue.serverTimestamp()
     });
     subscribeRoom(code);
   } catch(e) { toast('Could not join room: ' + e.message); }
@@ -605,7 +628,16 @@ async function joinRoom(code, name) {
 function subscribeRoom(code) {
   if (roomUnsubscribe) roomUnsubscribe();
   roomUnsubscribe = roomRef(code).onSnapshot(snap => {
-    if (!snap.exists) return;
+    if (!snap.exists) {
+      // Room was deleted (host left, expired, etc.)
+      stopRoom();
+      OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
+      document.getElementById('online-join-panel').classList.remove('hidden');
+      document.getElementById('online-lobby-panel').classList.add('hidden');
+      showScreen('screen-online');
+      toast('Room was closed', 3000);
+      return;
+    }
     const s = snap.data();
     OG = toRenderState(s);
     onRoomUpdate(s);
@@ -681,7 +713,8 @@ async function startOnlineGame() {
     const dealt = dealGame(d.players.length);
     await roomRef(currentRoomCode).update({
       phase: 'swap', deck: dealt.remainingDeck,
-      pile: [], sevenActive: false, direction: 1, finishCounter: 1, loserIndex: null,
+      pile: [], burnedPile: [], sevenActive: false, direction: 1, finishCounter: 1, loserIndex: null,
+      lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
       players: d.players.map((p, i) => ({
         ...p, swapReady: false, finished: false, finishOrder: null,
         hand:     dealt.players[i].hand,
@@ -712,6 +745,7 @@ async function submitSwap() {
       const firstPlayer = allReady ? findFirstPlayer(players) : s.currentPlayerIndex;
       t.update(roomRef(currentRoomCode), {
         players,
+        lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
         ...(allReady ? { phase: 'play', currentPlayerIndex: firstPlayer } : {})
       });
     });
@@ -748,6 +782,8 @@ async function fbPlayCards(cards) {
       if (phase === 'hand')        me.hand   = me.hand.filter(c => !ids.has(c.id));
       else if (phase === 'faceUp') me.faceUp = me.faceUp.filter(c => !ids.has(c.id));
       const res  = resolvePlay(cards, s.pile, s.sevenActive);
+      const burnedPile = [...(s.burnedPile || [])];
+      if (res.burned) burnedPile.push(...(s.pile || []), ...cards);
       const deck = [...(s.deck || [])];
       if (phase === 'hand') while (me.hand.length < 3 && deck.length) me.hand.push(deck.pop());
       let finishCounter = s.finishCounter || 1;
@@ -757,8 +793,9 @@ async function fbPlayCards(cards) {
       const { idx, dir } = onlineNextIdx(players, myOnlineIndex, res, s.direction || 1);
       const active = players.filter(p => !p.finished);
       t.update(roomRef(currentRoomCode), {
-        players, pile: res.newPile, sevenActive: res.newSevenActive, deck,
+        players, pile: res.newPile, burnedPile, sevenActive: res.newSevenActive, deck,
         direction: dir, currentPlayerIndex: idx, finishCounter,
+        lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
         phase:      active.length <= 1 ? 'ended' : s.phase,
         loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
       });
@@ -776,7 +813,10 @@ async function fbPickup() {
       const players = s.players.map(p => ({ ...p, hand: [...p.hand] }));
       players[myOnlineIndex].hand = [...players[myOnlineIndex].hand, ...(s.pile || [])];
       const idx = advanceTurnBy(players, myOnlineIndex, 1, s.direction || 1);
-      t.update(roomRef(currentRoomCode), { players, pile: [], sevenActive: false, currentPlayerIndex: idx });
+      t.update(roomRef(currentRoomCode), {
+        players, pile: [], sevenActive: false, currentPlayerIndex: idx,
+        lastActivity: firebase.firestore.FieldValue.serverTimestamp()
+      });
     });
   } catch(e) { toast('Pick up failed: ' + e.message); }
   selectedCards = [];
@@ -795,12 +835,14 @@ async function fbPlayFaceDown(index) {
       const card = me.faceDown.splice(index, 1)[0];
       let pile = s.pile || [], sevenActive = s.sevenActive, dir = s.direction || 1, idx;
       let res = { reverseDirection: false, extraTurn: false, skipCount: 0, newSevenActive: false };
+      const burnedPile = [...(s.burnedPile || [])];
       if (!isCardPlayable(card, pile, sevenActive)) {
         me.hand = [...me.hand, card, ...pile];
         pile = []; sevenActive = false;
         idx  = advanceTurnBy(players, myOnlineIndex, 1, dir);
       } else {
         res  = resolvePlay([card], pile, sevenActive);
+        if (res.burned) burnedPile.push(...pile, card);
         pile = res.newPile; sevenActive = res.newSevenActive;
         const next = onlineNextIdx(players, myOnlineIndex, res, dir);
         idx = next.idx; dir = next.dir;
@@ -811,7 +853,8 @@ async function fbPlayFaceDown(index) {
       }
       const active = players.filter(p => !p.finished);
       t.update(roomRef(currentRoomCode), {
-        players, pile, sevenActive, direction: dir, currentPlayerIndex: idx, finishCounter,
+        players, pile, burnedPile, sevenActive, direction: dir, currentPlayerIndex: idx, finishCounter,
+        lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
         phase:      active.length <= 1 ? 'ended' : s.phase,
         loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
       });
@@ -885,6 +928,7 @@ function renderOnlineGame(state) {
   if (dirEl) dirEl.textContent = (state.direction === -1) ? '↺' : '↻';
 
   renderPile(state.pile);
+  renderBurnedPile(state.burnedPile);
 
   const nameTag = document.getElementById('human-name');
   nameTag.textContent = me.name;
@@ -968,10 +1012,32 @@ document.getElementById('btn-pickup').onclick = function () {
 };
 
 // ═══════════════════════════════════════════════════════
+//  Lobby cleanup  — delete lobby rooms idle > 5 minutes
+// ═══════════════════════════════════════════════════════
+async function cleanupExpiredRooms() {
+  if (!window.db) return;
+  try {
+    const cutoff = firebase.firestore.Timestamp.fromDate(
+      new Date(Date.now() - 5 * 60 * 1000)
+    );
+    const snap = await window.db.collection('rooms')
+      .where('lastActivity', '<', cutoff)
+      .limit(30).get();
+    if (snap.empty) return;
+    const batch = window.db.batch();
+    snap.forEach(doc => {
+      // Only remove lobby rooms; leave games in progress alone
+      if (doc.data().phase === 'lobby') batch.delete(doc.ref);
+    });
+    await batch.commit();
+  } catch(e) { /* best-effort, silent fail */ }
+}
+
+// ═══════════════════════════════════════════════════════
 //  Navigation / Menu events
 // ═══════════════════════════════════════════════════════
 document.getElementById('btn-vs-bots').onclick     = () => showScreen('screen-local-setup');
-document.getElementById('btn-online').onclick      = () => showScreen('screen-online');
+document.getElementById('btn-online').onclick      = () => { showScreen('screen-online'); cleanupExpiredRooms(); };
 document.getElementById('btn-local-back').onclick  = () => showScreen('screen-menu');
 document.getElementById('btn-online-back').onclick = () => showScreen('screen-menu');
 document.getElementById('btn-local-start').onclick = () => startLocalGame();
@@ -998,11 +1064,14 @@ document.getElementById('btn-join-room').onclick = () => {
 document.getElementById('btn-start-online').onclick = () => startOnlineGame();
 
 document.getElementById('btn-leave-room').onclick = () => {
-  stopRoom();
+  const code = currentRoomCode;
+  stopRoom(); // unsubscribe before deleting so our own listener doesn't react
   OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
   document.getElementById('online-join-panel').classList.remove('hidden');
   document.getElementById('online-lobby-panel').classList.add('hidden');
   showScreen('screen-menu');
+  // Delete the room so it doesn't linger — notifies all other members via onSnapshot
+  if (code) roomRef(code).delete().catch(() => {});
 };
 
 document.getElementById('btn-go-menu').onclick = () => {
