@@ -195,8 +195,19 @@
     </div>
   </div>
 
+  <!-- ─── PILE POPUP ─────────────────────────────────── -->
+  <div id="pile-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Discard Pile <span class="modal-pile-count">(<span id="pile-modal-count">0</span> cards)</span></h3>
+        <button class="btn btn-ghost modal-close-btn" id="btn-close-pile">✕</button>
+      </div>
+      <div id="pile-modal-cards" class="pile-modal-cards"></div>
+    </div>
+  </div>
+
 </div><!-- /app -->
-<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js" crossorigin="anonymous"></script>
 <script src="gameLogic.js"></script>
 <script src="app.js"></script>
 </body>

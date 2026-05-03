@@ -180,14 +180,18 @@ function renderPile(pile) {
     emp.textContent = 'empty';
     zone.appendChild(emp);
   } else {
+    // Fan: newest card leftmost (highest z-index), older cards peek to the RIGHT
+    // showing only their right border (right edge with rotated rank/suit).
+    const peek = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--pile-peek')
+    ) || 16;
     const show = pile.slice(-3);
     show.forEach((card, i) => {
       const el = makeCardEl(card);
-      el.style.position = 'absolute';
-      el.style.top  = `${-i * 2}px`;
-      el.style.left = `${-i * 2}px`;
-      el.style.zIndex = i;
-      el.style.cursor = 'default';
+      // i=0 oldest → rightmost; i=show.length-1 newest → leftmost (pos=0)
+      const pos = show.length - 1 - i;   // 0 = newest/top
+      el.style.left   = `${pos * peek}px`;
+      el.style.zIndex = show.length - pos; // newest = highest z
       zone.appendChild(el);
     });
   }
@@ -647,8 +651,17 @@ function showGameOver() {
 // ═══════════════════════════════════════════════════════
 function connectSocket() {
   if (socket && socket.connected) return;
-  socket = io();
+  if (typeof io === 'undefined') {
+    toast('⚠ Multiplayer server not available in this build', 5000);
+    return;
+  }
+  socket = io({ timeout: 8000 });
 
+  socket.on('connect_error', () => {
+    toast('⚠ Cannot reach multiplayer server', 5000);
+    const status = document.getElementById('lobby-status');
+    if (status) status.textContent = 'Server unavailable — try again later.';
+  });
   socket.on('connect', () => console.log('socket connected'));
   socket.on('error', ({ msg }) => toast('⚠ ' + msg));
 
@@ -942,4 +955,35 @@ document.getElementById('btn-go-again').onclick = () => {
 // Room code input: force uppercase
 document.getElementById('room-code-input').addEventListener('input', function () {
   this.value = this.value.toUpperCase();
+});
+
+// ═══════════════════════════════════════════════════════
+//  Pile popup  — click pile zone to inspect all cards
+// ═══════════════════════════════════════════════════════
+document.getElementById('pile-zone').addEventListener('click', () => {
+  const pile = mode === 'local' ? LG?.pile : OG?.pile;
+  if (!pile || pile.length === 0) return;
+
+  document.getElementById('pile-modal-count').textContent = pile.length;
+  const cardsEl = document.getElementById('pile-modal-cards');
+  cardsEl.innerHTML = '';
+  // Show newest first (top of pile first)
+  [...pile].reverse().forEach(card => {
+    const el = makeCardEl(card);
+    el.style.pointerEvents = 'none'; // non-interactive inside popup
+    cardsEl.appendChild(el);
+  });
+  document.getElementById('pile-modal').classList.remove('hidden');
+});
+
+document.getElementById('btn-close-pile').addEventListener('click', () => {
+  document.getElementById('pile-modal').classList.add('hidden');
+});
+
+// Close on backdrop click or Escape key
+document.getElementById('pile-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) document.getElementById('pile-modal').classList.add('hidden');
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('pile-modal').classList.add('hidden');
 });
