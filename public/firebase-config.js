@@ -21,12 +21,12 @@
 
 (function () {
   const cfg = {
-    apiKey:            'AIzaSyAlxnfgFWWVO4A8o11nCE8MMQuWHqErEEU',
-    authDomain:        'gen-lang-client-0590578277.firebaseapp.com',
-    projectId:         'gen-lang-client-0590578277',
-    storageBucket:     'gen-lang-client-0590578277.firebasestorage.app',
-    messagingSenderId: '586691852652',
-    appId:             '1:586691852652:web:e4305b5efa71efdc83db49'
+    apiKey:            'AIzaSyBkqD_O-p6otKVUibffSb1m6g7XtlnLae4',
+    authDomain:        'claude-cd59e.firebaseapp.com',
+    projectId:         'claude-cd59e',
+    storageBucket:     'claude-cd59e.firebasestorage.app',
+    messagingSenderId: '424910660038',
+    appId:             '1:424910660038:web:8b79581d9b06e3e3d912c7'
   };
 
   if (!firebase.apps.length) firebase.initializeApp(cfg);
