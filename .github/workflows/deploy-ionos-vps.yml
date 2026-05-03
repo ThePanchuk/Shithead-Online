@@ -1,0 +1,70 @@
+# ──────────────────────────────────────────────────────────────────────────
+#  Deploy to an IONOS VPS / Cloud Server via SSH + rsync.
+#
+#  Use this if you have an IONOS Linux VPS / Cloud Server (root SSH access).
+#  Node.js + the multiplayer Socket.io server will run there.
+#
+#  Required GitHub repo secrets:
+#    SSH_HOST        — your IONOS server IP or hostname (e.g. 12.34.56.78)
+#    SSH_USER        — login user (often root, or a deploy user)
+#    SSH_PRIVATE_KEY — contents of an OpenSSH private key (paired pub key
+#                      sits in the server's ~/.ssh/authorized_keys)
+#    SSH_PORT        — optional, defaults to 22
+#    APP_PATH        — absolute path on the server, e.g. /var/www/shithead
+#
+#  One-time server setup (run on the VPS):
+#    apt update && apt install -y nodejs npm
+#    npm install -g pm2
+#    mkdir -p /var/www/shithead
+#    pm2 startup            # follow the printed instruction
+#
+#  After first deploy, register the service with PM2:
+#    cd /var/www/shithead && pm2 start server.js --name shithead && pm2 save
+#
+#  Reverse proxy (recommended) — nginx config snippet for HTTPS + WebSockets:
+#
+#    server {
+#      server_name  game.example.com;
+#      listen 443 ssl;
+#      # ... ssl_certificate / ssl_certificate_key ...
+#      location / {
+#        proxy_pass         http://127.0.0.1:3000;
+#        proxy_http_version 1.1;
+#        proxy_set_header   Upgrade    $http_upgrade;
+#        proxy_set_header   Connection "upgrade";
+#        proxy_set_header   Host       $host;
+#      }
+#    }
+# ──────────────────────────────────────────────────────────────────────────
+name: Deploy to IONOS VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p ${{ secrets.SSH_PORT || 22 }} -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Rsync project files to server
+        run: |
+          rsync -az --delete \
+            --exclude '.git' --exclude '.github' --exclude 'node_modules' \
+            -e "ssh -p ${{ secrets.SSH_PORT || 22 }} -i ~/.ssh/id_ed25519" \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.APP_PATH }}/
+
+      - name: Install deps + reload PM2
+        run: |
+          ssh -p ${{ secrets.SSH_PORT || 22 }} -i ~/.ssh/id_ed25519 \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "cd ${{ secrets.APP_PATH }} && npm ci --omit=dev && pm2 reload shithead || pm2 start server.js --name shithead && pm2 save"

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Shithead – Card Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ─── MAIN MENU ──────────────────────────────────── -->
+  <div id="screen-menu" class="screen active">
+    <div class="menu-card">
+      <h1 class="game-title">💩 Shithead</h1>
+      <p class="subtitle">The Classic Card Game</p>
+      <div class="menu-buttons">
+        <button class="btn btn-primary btn-lg" id="btn-vs-bots">🤖 Play vs Bots</button>
+        <button class="btn btn-secondary btn-lg" id="btn-online">🌐 Play Online</button>
+      </div>
+      <p class="rules-link"><a href="https://www.pagat.com/beating/shithead.html" target="_blank" rel="noopener">How to play ↗</a></p>
+    </div>
+  </div>
+
+  <!-- ─── LOCAL SETUP ────────────────────────────────── -->
+  <div id="screen-local-setup" class="screen">
+    <div class="menu-card">
+      <h2>Setup Local Game</h2>
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="local-name" value="Player" maxlength="15" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Number of Bots</label>
+        <div class="btn-row" id="bot-count-btns">
+          <button class="btn btn-toggle active" data-n="1">1 Bot</button>
+          <button class="btn btn-toggle" data-n="2">2 Bots</button>
+          <button class="btn btn-toggle" data-n="3">3 Bots</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="rule-seven" checked>
+          7-rule: next play must be &lt; 7
+        </label>
+      </div>
+      <details class="rules-summary">
+        <summary>Special cards ▾</summary>
+        <ul>
+          <li><strong>2</strong> — Wild · always playable</li>
+          <li><strong>3</strong> — Mirror · plays as the card below it</li>
+          <li><strong>7</strong> — Next must play &lt; 7</li>
+          <li><strong>8</strong> — Skip the next player (each 8 = 1 skip)</li>
+          <li><strong>9</strong> — Reverse direction</li>
+          <li><strong>10</strong> — Burn pile · play again</li>
+          <li><strong>4 of a kind</strong> — Burn pile · play again</li>
+        </ul>
+      </details>
+      <div class="btn-row mt-sm">
+        <button class="btn btn-ghost" id="btn-local-back">← Back</button>
+        <button class="btn btn-primary" id="btn-local-start">Start Game →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── ONLINE LOBBY ───────────────────────────────── -->
+  <div id="screen-online" class="screen">
+    <div class="menu-card">
+      <h2>Online Multiplayer</h2>
+      <div id="online-join-panel">
+        <div class="form-group">
+          <label>Your Name</label>
+          <input type="text" id="online-name" value="Player" maxlength="15" autocomplete="off">
+        </div>
+        <div class="online-split">
+          <button class="btn btn-primary" id="btn-create-room">+ Create Room</button>
+          <span class="or-divider">or join</span>
+          <div class="join-row">
+            <input type="text" id="room-code-input" placeholder="CODE" maxlength="4" autocomplete="off">
+            <button class="btn btn-secondary" id="btn-join-room">Join</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost mt-sm" id="btn-online-back">← Back</button>
+      </div>
+      <div id="online-lobby-panel" class="hidden">
+        <div class="room-code-label">Room Code: <strong id="room-code-display">----</strong></div>
+        <div id="lobby-player-list"></div>
+        <p id="lobby-status" class="lobby-status"></p>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btn-leave-room">Leave</button>
+          <button class="btn btn-primary hidden" id="btn-start-online">Start Game →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── SWAP PHASE ─────────────────────────────────── -->
+  <div id="screen-swap" class="screen">
+    <div class="swap-container">
+      <h2>Arrange Your Cards</h2>
+      <p class="swap-hint">Tap a <strong>hand card</strong>, then tap a <strong>face-up card</strong> to swap them.<br>Face-up cards are visible to all players!</p>
+      <div class="swap-zones">
+        <div class="swap-zone">
+          <div class="zone-label">Face-Up Cards <span class="zone-note">(visible to all)</span></div>
+          <div id="swap-faceup" class="card-row swap-row"></div>
+        </div>
+        <div class="swap-arrow">⇅ swap</div>
+        <div class="swap-zone">
+          <div class="zone-label">Your Hand <span class="zone-note">(private)</span></div>
+          <div id="swap-hand" class="card-row swap-row"></div>
+        </div>
+      </div>
+      <div id="swap-status" class="swap-status"></div>
+      <button class="btn btn-primary btn-lg" id="btn-swap-ready">Ready to Play ✓</button>
+    </div>
+  </div>
+
+  <!-- ─── GAME TABLE ─────────────────────────────────── -->
+  <div id="screen-game" class="screen">
+
+    <div id="game-header">
+      <div id="game-status-bar"></div>
+      <div id="header-info">
+        <span id="direction-indicator" class="direction-badge" title="Play direction">↻</span>
+        <span id="deck-info">🂠 <span id="deck-count">0</span></span>
+        <span id="seven-warning" class="hidden" title="After a 7, next play must be lower than 7">⚠ &lt;7 only!</span>
+      </div>
+    </div>
+
+    <div id="table">
+
+      <!-- Opponents -->
+      <div id="opponents-area"></div>
+
+      <!-- Centre: deck + pile -->
+      <div id="center-area">
+        <div id="deck-zone">
+          <div id="deck-visual" class="card card-back">
+            <span id="deck-num" class="deck-num">0</span>
+          </div>
+          <div class="zone-label-small">Draw pile</div>
+        </div>
+        <div id="pile-zone">
+          <div id="pile-visual"></div>
+          <div class="zone-label-small">Discard&thinsp;(<span id="pile-count">0</span>)</div>
+        </div>
+      </div>
+
+      <!-- Human player -->
+      <div id="human-area">
+
+        <!-- Row 1 — Tableau: face-up cards lying on top of face-down cards -->
+        <div class="human-tableau">
+          <div class="human-zone">
+            <div class="zone-label-small">Tableau (face-up over face-down)</div>
+            <div id="human-stacks" class="stack-row"></div>
+          </div>
+        </div>
+
+        <!-- Row 2 — hand (fan / overlapping, scrollable) -->
+        <div class="human-zone hand-zone-wrap">
+          <div class="zone-label-small">Hand</div>
+          <div class="hand-fan-scroll">
+            <div id="human-hand" class="hand-fan"></div>
+          </div>
+        </div>
+
+        <!-- Row 3 — name badge + action buttons -->
+        <div id="action-bar">
+          <div id="human-name" class="player-name-tag"></div>
+          <div class="action-btns">
+            <button class="btn btn-primary hidden" id="btn-play-selected">▶ Play</button>
+            <button class="btn btn-danger  hidden" id="btn-pickup">↑ Pick Up</button>
+          </div>
+        </div>
+
+      </div><!-- /human-area -->
+    </div><!-- /table -->
+  </div><!-- /screen-game -->
+
+  <!-- ─── GAME OVER ──────────────────────────────────── -->
+  <div id="screen-gameover" class="screen">
+    <div class="menu-card gameover-card">
+      <div id="gameover-emoji" class="gameover-emoji">💩</div>
+      <h2 id="gameover-title">Game Over!</h2>
+      <div id="gameover-result" class="gameover-result"></div>
+      <div id="finish-order-list" class="finish-order"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost"    id="btn-go-menu">Main Menu</button>
+        <button class="btn btn-primary"  id="btn-go-again">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+<script src="/socket.io/socket.io.js"></script>
+<script src="gameLogic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
