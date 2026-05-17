@@ -35,6 +35,17 @@ let _lastOnlineState = null;
 // Track burned-pile length across online renders to detect new burns
 let _prevOnlineBurnCount = -1;
 
+// Classic Mode mistake tracking
+let _prevMistakeSeq   = -1;   // last seen mistake seq; -1 = not yet in play phase
+let _mistakeAnimating = false; // blocks renderOnlineGame during animation
+let _playPhaseShown   = false; // true once we've initialised _prevMistakeSeq for this game
+
+// Pending online game mode selected by the player before entering the lobby
+let _pendingOnlineMode = 'pathetic'; // 'pathetic' | 'classic'
+
+// Deck-drag state (Classic Mode manual draw)
+let _deckDrag = null;
+
 // ═══════════════════════════════════════════════════════
 //  Utilities
 // ═══════════════════════════════════════════════════════
@@ -602,6 +613,141 @@ function flipFaceDownAnimation(card, startRect) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Classic Mode — MISTAKE overlay (shown to all players)
+// ═══════════════════════════════════════════════════════
+function mistakeAnimation(playerName) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0',
+      'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
+      'background:rgba(0,0,0,0.80)',
+      'z-index:2000',
+      'pointer-events:none',
+      'opacity:0',
+      'transition:opacity 0.15s ease-out',
+    ].join(';');
+
+    const titleEl = document.createElement('div');
+    titleEl.textContent = 'MISTAKE!';
+    titleEl.style.cssText = [
+      'font-size:clamp(52px,13vw,96px)',
+      'font-weight:900',
+      'color:#ff2222',
+      'text-shadow:0 0 28px rgba(255,60,0,.95),0 0 60px rgba(255,0,0,.55)',
+      'letter-spacing:.06em',
+      'transform:scale(0.75)',
+      'transition:transform 0.18s cubic-bezier(.2,0,.3,1)',
+      'animation:mistake-shake .55s ease-in-out .18s both',
+    ].join(';');
+
+    const nameEl = document.createElement('div');
+    nameEl.textContent = playerName;
+    nameEl.style.cssText = [
+      'font-size:clamp(18px,4vw,28px)',
+      'color:#ffaaaa',
+      'margin-top:10px',
+      'letter-spacing:.08em',
+      'opacity:0',
+      'transition:opacity 0.25s ease-out 0.1s',
+    ].join(';');
+
+    overlay.appendChild(titleEl);
+    overlay.appendChild(nameEl);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      overlay.style.opacity  = '1';
+      titleEl.style.transform = 'scale(1)';
+      nameEl.style.opacity    = '1';
+    }));
+
+    setTimeout(() => {
+      overlay.style.transition = 'opacity 0.3s ease-out';
+      overlay.style.opacity    = '0';
+      setTimeout(() => { overlay.remove(); resolve(); }, 310);
+    }, 1900);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  Classic Mode — manual deck draw
+// ═══════════════════════════════════════════════════════
+async function fbDrawCard() {
+  if (!currentRoomCode) return;
+  try {
+    await window.db.runTransaction(async t => {
+      const snap = await t.get(roomRef(currentRoomCode));
+      const s    = snap.data();
+      if (s.gameMode !== 'classic') return;
+      const deck = [...(s.deck || [])];
+      if (!deck.length) return;
+      const players = s.players.map(p => ({ ...p, hand: [...p.hand] }));
+      const card = deck.pop();
+      players[myOnlineIndex].hand.push(card);
+      t.update(roomRef(currentRoomCode), {
+        players, deck,
+        lastActivity: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+  } catch(e) { /* silent — minor draw failure shouldn't disrupt play */ }
+}
+
+// Deck-drag helpers — drag a card back from #deck-visual to #human-area to draw
+function _deckDragCleanup() {
+  if (!_deckDrag) return;
+  if (_deckDrag.ghost) _deckDrag.ghost.remove();
+  document.removeEventListener('mousemove', _deckDrag._mm);
+  document.removeEventListener('mouseup',   _deckDrag._mu);
+  document.removeEventListener('touchmove', _deckDrag._tm);
+  document.removeEventListener('touchend',  _deckDrag._te);
+  _deckDrag = null;
+}
+
+function _deckBeginDrag(clientX, clientY) {
+  if (_deckDrag) return;
+  if (OG?.gameMode !== 'classic') return;
+
+  const cs    = getComputedStyle(document.documentElement);
+  const cardW = parseFloat(cs.getPropertyValue('--card-w'));
+  const cardH = parseFloat(cs.getPropertyValue('--card-h'));
+
+  const ghost = makeBackEl();
+  ghost.style.cssText = [
+    'position:fixed', 'left:0', 'top:0',
+    `width:${cardW}px`, `height:${cardH}px`,
+    'pointer-events:none', 'z-index:1800',
+    'transition:none', 'opacity:0.88',
+    `transform:translate(${clientX - cardW/2}px,${clientY - cardH/2}px) rotate(5deg) scale(1.07)`,
+  ].join(';');
+  document.body.appendChild(ghost);
+  _deckDrag = { ghost, _mm: null, _mu: null, _tm: null, _te: null };
+
+  const move = (x, y) => {
+    ghost.style.transform = `translate(${x - cardW/2}px,${y - cardH/2}px) rotate(5deg) scale(1.07)`;
+  };
+  const drop = (x, y) => {
+    _deckDragCleanup();
+    const humanArea = document.getElementById('human-area');
+    if (!humanArea) return;
+    const rect = humanArea.getBoundingClientRect();
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+      fbDrawCard();
+    }
+  };
+
+  _deckDrag._mm = e => move(e.clientX, e.clientY);
+  _deckDrag._mu = e => drop(e.clientX, e.clientY);
+  _deckDrag._tm = e => { e.preventDefault(); const t = e.touches[0]; move(t.clientX, t.clientY); };
+  _deckDrag._te = e => { const t = e.changedTouches[0]; drop(t.clientX, t.clientY); };
+
+  document.addEventListener('mousemove', _deckDrag._mm);
+  document.addEventListener('mouseup',   _deckDrag._mu);
+  document.addEventListener('touchmove', _deckDrag._tm, { passive: false });
+  document.addEventListener('touchend',  _deckDrag._te);
+}
+
+// ═══════════════════════════════════════════════════════
 //  Card staging  —  selected hand cards float to centre
 // ═══════════════════════════════════════════════════════
 
@@ -702,7 +848,8 @@ function renderHumanStacks(faceDownLen, faceUp, opt) {
     stack.className = 'card-stack';
 
     if (i < faceDownLen) {
-      const playable = opt.isMyTurn && opt.phase === 'faceDown';
+      // alwaysAct (Classic Mode): face-down is clickable whenever it's the player's phase
+      const playable = (opt.isMyTurn || opt.alwaysAct) && opt.phase === 'faceDown';
       const fdEl = makeBackEl({ playable });
       fdEl.classList.add('stack-facedown');
       if (playable && opt.onFaceDownClick) fdEl.onclick = () => opt.onFaceDownClick(i, fdEl);
@@ -711,12 +858,14 @@ function renderHumanStacks(faceDownLen, faceUp, opt) {
 
     if (i < faceUp.length) {
       const card = faceUp[i];
-      const canPlay = opt.isMyTurn && opt.phase === 'faceUp' &&
-                      isCardPlayable(card, opt.pile, opt.sevenActive);
+      // alwaysAct (Classic Mode): skip isCardPlayable check so any card is selectable
+      const canPlay = (opt.isMyTurn || opt.alwaysAct) && opt.phase === 'faceUp' &&
+                      (opt.alwaysAct || isCardPlayable(card, opt.pile, opt.sevenActive));
       const sel = selectedCards.some(c => c.id === card.id);
       const fuEl = makeCardEl(card, {
         selected: sel,
-        unplayable: opt.isMyTurn && opt.phase === 'faceUp' && !canPlay
+        // No unplayable dim in Classic Mode
+        unplayable: !opt.alwaysAct && opt.isMyTurn && opt.phase === 'faceUp' && !canPlay
       });
       fuEl.classList.add('stack-faceup');
       if (canPlay && opt.onFaceUpClick) fuEl.onclick = () => opt.onFaceUpClick(card);
@@ -1326,6 +1475,11 @@ function stopRoom() {
   currentRoomCode = null;
   _swapShown = false;
   _swapDragCleanup();
+  _deckDragCleanup();
+  _prevOnlineBurnCount = -1;
+  _prevMistakeSeq   = -1;
+  _mistakeAnimating = false;
+  _playPhaseShown   = false;
 }
 
 // ─── Create / Join ─────────────────────────────────────
@@ -1339,10 +1493,12 @@ async function createRoom(name) {
   try {
     await roomRef(code).set({
       code, phase: 'lobby', hostIdx: 0,
+      gameMode: _pendingOnlineMode || 'pathetic',
       players: [{ name, idx: 0, finished: false, finishOrder: null,
                   swapReady: false, hand: [], faceUp: [], faceDown: [] }],
       currentPlayerIndex: 0, direction: 1, sevenActive: false,
       pile: [], burnedPile: [], deck: [], finishCounter: 1, loserIndex: null,
+      mistake: null, lastPlayerIdx: null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       lastActivity: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -1417,8 +1573,9 @@ function onRoomUpdate(s) {
     list.innerHTML = s.players.map((p, i) =>
       `<div class="lobby-player${i === 0 ? ' host' : ''}">${escHtml(p.name)}</div>`
     ).join('');
+    const modeLabel = s.gameMode === 'classic' ? ' · Classic Mode ⚡' : ' · Pathetic Mode';
     document.getElementById('lobby-status').textContent =
-      `${s.players.length}/5 — ${s.players.length < 2 ? 'Waiting for players…' : 'Ready to start!'}`;
+      `${s.players.length}/5 — ${s.players.length < 2 ? 'Waiting for players…' : 'Ready to start!'}${modeLabel}`;
     const btnStart = document.getElementById('btn-start-online');
     btnStart.classList.toggle('hidden', myOnlineIndex !== 0);
     if (myOnlineIndex === 0) btnStart.disabled = s.players.length < 2;
@@ -1443,6 +1600,27 @@ function onRoomUpdate(s) {
 
   } else if (s.phase === 'play' || s.phase === 'ended') {
     if (!document.getElementById('screen-game').classList.contains('active')) showScreen('screen-game');
+
+    // First time in play phase: initialise the mistake sequence baseline
+    // so we don't replay old mistakes when entering or re-joining.
+    if (!_playPhaseShown) {
+      _playPhaseShown = true;
+      _prevMistakeSeq = s.mistake?.seq ?? -1;
+    }
+
+    // Classic Mode: detect a new mistake and show the MISTAKE overlay
+    const newMistakeSeq = s.mistake?.seq ?? -1;
+    if (s.gameMode === 'classic' && newMistakeSeq > _prevMistakeSeq) {
+      _prevMistakeSeq = newMistakeSeq;
+      const playerName = (s.players[s.mistake.playerIdx] || {}).name || 'Someone';
+      _mistakeAnimating = true;
+      mistakeAnimation(playerName).then(() => {
+        _mistakeAnimating = false;
+        if (_lastOnlineState) renderOnlineGame(_lastOnlineState);
+      });
+      // renderOnlineGame below will detect _mistakeAnimating and only cache state
+    }
+
     renderOnlineGame(OG);
     if (s.phase === 'ended') setTimeout(showGameOver, 800);
   }
@@ -1459,7 +1637,9 @@ async function startOnlineGame() {
     const dealt = dealGame(d.players.length);
     await roomRef(currentRoomCode).update({
       phase: 'swap', deck: dealt.remainingDeck,
+      gameMode: d.gameMode || 'pathetic',
       pile: [], burnedPile: [], sevenActive: false, direction: 1, finishCounter: 1, loserIndex: null,
+      mistake: null, lastPlayerIdx: null,
       lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
       players: d.players.map((p, i) => ({
         ...p, swapReady: false, finished: false, finishOrder: null,
@@ -1517,30 +1697,119 @@ async function fbPlayCards(cards) {
     await window.db.runTransaction(async t => {
       const snap = await t.get(roomRef(currentRoomCode));
       const s    = snap.data();
-      if (s.currentPlayerIndex !== myOnlineIndex) return;
+      const isClassic = s.gameMode === 'classic';
       const players = s.players.map(p => ({
         ...p, hand: [...p.hand], faceUp: [...p.faceUp], faceDown: [...p.faceDown]
       }));
       const me    = players[myOnlineIndex];
       const phase = getPlayerPhase(me);
       const ids   = new Set(cards.map(c => c.id));
-      if (!isCardPlayable(cards[0], s.pile, s.sevenActive)) return;
+
+      // ── Pathetic Mode (current behaviour) ───────────────────────────
+      if (!isClassic) {
+        if (s.currentPlayerIndex !== myOnlineIndex) return;
+        if (!isCardPlayable(cards[0], s.pile, s.sevenActive)) return;
+        if (phase === 'hand')        me.hand   = me.hand.filter(c => !ids.has(c.id));
+        else if (phase === 'faceUp') me.faceUp = me.faceUp.filter(c => !ids.has(c.id));
+        const res  = resolvePlay(cards, s.pile, s.sevenActive);
+        const burnedPile = [...(s.burnedPile || [])];
+        if (res.burned) burnedPile.push(...(s.pile || []), ...cards);
+        const deck = [...(s.deck || [])];
+        if (phase === 'hand') while (me.hand.length < 3 && deck.length) me.hand.push(deck.pop());
+        let finishCounter = s.finishCounter || 1;
+        if (!me.finished && !me.hand.length && !me.faceUp.length && !me.faceDown.length) {
+          me.finished = true; me.finishOrder = finishCounter++;
+        }
+        const { idx, dir } = onlineNextIdx(players, myOnlineIndex, res, s.direction || 1);
+        const active = players.filter(p => !p.finished);
+        t.update(roomRef(currentRoomCode), {
+          players, pile: res.newPile, burnedPile, sevenActive: res.newSevenActive, deck,
+          direction: dir, currentPlayerIndex: idx, finishCounter,
+          lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
+          phase:      active.length <= 1 ? 'ended' : s.phase,
+          loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
+        });
+        return;
+      }
+
+      // ── Classic Mode ─────────────────────────────────────────────────
+      const isMyTurn   = s.currentPlayerIndex === myOnlineIndex;
+      const isPlayable = isCardPlayable(cards[0], s.pile, s.sevenActive);
+      const mistakeSeq = (s.mistake?.seq ?? -1) + 1;
+      const direction  = s.direction || 1;
+
+      // ── MISTAKE: out of turn OR illegal card value ───────────────────
+      if (!isMyTurn || !isPlayable) {
+        // Cards go onto pile first, then the offending player picks up everything
+        if (phase === 'hand')        me.hand   = me.hand.filter(c => !ids.has(c.id));
+        else if (phase === 'faceUp') me.faceUp = me.faceUp.filter(c => !ids.has(c.id));
+        const combinedPile = [...(s.pile || []), ...cards];
+        me.hand = [...me.hand, ...combinedPile];
+        const idx = advanceTurnBy(players, myOnlineIndex, 1, direction);
+        t.update(roomRef(currentRoomCode), {
+          players, pile: [], sevenActive: false,
+          currentPlayerIndex: idx,
+          mistake: { playerIdx: myOnlineIndex, seq: mistakeSeq },
+          lastPlayerIdx: null,
+          lastActivity: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        return;
+      }
+
+      // ── Valid play in Classic Mode ───────────────────────────────────
       if (phase === 'hand')        me.hand   = me.hand.filter(c => !ids.has(c.id));
       else if (phase === 'faceUp') me.faceUp = me.faceUp.filter(c => !ids.has(c.id));
-      const res  = resolvePlay(cards, s.pile, s.sevenActive);
+
+      const res = resolvePlay(cards, s.pile, s.sevenActive);
       const burnedPile = [...(s.burnedPile || [])];
       if (res.burned) burnedPile.push(...(s.pile || []), ...cards);
       const deck = [...(s.deck || [])];
-      if (phase === 'hand') while (me.hand.length < 3 && deck.length) me.hand.push(deck.pop());
+      // Classic Mode: NO auto-draw — players draw manually
+
+      // Check draw-timing mistake: did the previous valid player fail to draw up to 3?
+      const lastPIdx = s.lastPlayerIdx;
+      const hasDrawMistake = (
+        lastPIdx !== null && lastPIdx !== undefined &&
+        lastPIdx !== myOnlineIndex &&
+        (players[lastPIdx]?.hand?.length ?? 0) < 3 &&
+        deck.length > 0
+      );
+
+      let pile = res.newPile;
+      let sevenActive = res.newSevenActive;
       let finishCounter = s.finishCounter || 1;
       if (!me.finished && !me.hand.length && !me.faceUp.length && !me.faceDown.length) {
         me.finished = true; me.finishOrder = finishCounter++;
       }
-      const { idx, dir } = onlineNextIdx(players, myOnlineIndex, res, s.direction || 1);
+
+      if (hasDrawMistake) {
+        // lastPIdx player gets the resulting pile (includes the card just played)
+        const mistakePlr = players[lastPIdx];
+        mistakePlr.hand  = [...mistakePlr.hand, ...pile];
+        pile        = [];
+        sevenActive = false;
+        const idx = advanceTurnBy(players, lastPIdx, 1, direction);
+        const active = players.filter(p => !p.finished);
+        t.update(roomRef(currentRoomCode), {
+          players, pile, burnedPile, sevenActive, deck,
+          direction, currentPlayerIndex: idx, finishCounter,
+          mistake: { playerIdx: lastPIdx, seq: mistakeSeq },
+          lastPlayerIdx: null,
+          lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
+          phase:      active.length <= 1 ? 'ended' : s.phase,
+          loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
+        });
+        return;
+      }
+
+      // Normal valid play — advance turn
+      const { idx, dir } = onlineNextIdx(players, myOnlineIndex, res, direction);
       const active = players.filter(p => !p.finished);
       t.update(roomRef(currentRoomCode), {
-        players, pile: res.newPile, burnedPile, sevenActive: res.newSevenActive, deck,
+        players, pile, burnedPile, sevenActive, deck,
         direction: dir, currentPlayerIndex: idx, finishCounter,
+        mistake: s.mistake || null,
+        lastPlayerIdx: myOnlineIndex,
         lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
         phase:      active.length <= 1 ? 'ended' : s.phase,
         loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
@@ -1556,12 +1825,16 @@ async function fbPickup() {
     await window.db.runTransaction(async t => {
       const snap = await t.get(roomRef(currentRoomCode));
       const s    = snap.data();
-      if (s.currentPlayerIndex !== myOnlineIndex) return;
+      const isClassic = s.gameMode === 'classic';
+      // Pathetic Mode: only pick up on your turn; Classic Mode: always allowed
+      if (!isClassic && s.currentPlayerIndex !== myOnlineIndex) return;
       const players = s.players.map(p => ({ ...p, hand: [...p.hand] }));
       players[myOnlineIndex].hand = [...players[myOnlineIndex].hand, ...(s.pile || [])];
+      // Turn always advances to next after the player who picked up
       const idx = advanceTurnBy(players, myOnlineIndex, 1, s.direction || 1);
       t.update(roomRef(currentRoomCode), {
         players, pile: [], sevenActive: false, currentPlayerIndex: idx,
+        ...(isClassic ? { lastPlayerIdx: null } : {}),
         lastActivity: firebase.firestore.FieldValue.serverTimestamp()
       });
     });
@@ -1575,12 +1848,29 @@ async function fbPlayFaceDown(index, srcEl) {
     await window.db.runTransaction(async t => {
       const snap = await t.get(roomRef(currentRoomCode));
       const s    = snap.data();
-      if (s.currentPlayerIndex !== myOnlineIndex) return;
+      const isClassic = s.gameMode === 'classic';
+      if (!isClassic && s.currentPlayerIndex !== myOnlineIndex) return;
       const players = s.players.map(p => ({
         ...p, hand: [...p.hand], faceUp: [...p.faceUp], faceDown: [...p.faceDown]
       }));
       const me   = players[myOnlineIndex];
       const card = me.faceDown.splice(index, 1)[0];
+
+      // Classic Mode: playing a face-down card out of turn is a MISTAKE
+      if (isClassic && s.currentPlayerIndex !== myOnlineIndex) {
+        const mistakeSeq = (s.mistake?.seq ?? -1) + 1;
+        const combinedPile = [...(s.pile || []), card];
+        me.hand = [...me.hand, ...combinedPile];
+        const idx = advanceTurnBy(players, myOnlineIndex, 1, s.direction || 1);
+        t.update(roomRef(currentRoomCode), {
+          players, pile: [], sevenActive: false,
+          currentPlayerIndex: idx,
+          mistake: { playerIdx: myOnlineIndex, seq: mistakeSeq },
+          lastPlayerIdx: null,
+          lastActivity: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        return;
+      }
       // Animate the card flying to the pile (we know the card now)
       if (srcRect && isCardPlayable(card, s.pile || [], s.sevenActive)) {
         flyCardsToPile([card], [srcRect]);
@@ -1604,8 +1894,11 @@ async function fbPlayFaceDown(index, srcEl) {
         me.finished = true; me.finishOrder = finishCounter++;
       }
       const active = players.filter(p => !p.finished);
+      // In Classic Mode: track who just played (for draw-timing check); null on pickup
+      const wasPlayable = isCardPlayable(card, s.pile || [], s.sevenActive);
       t.update(roomRef(currentRoomCode), {
         players, pile, burnedPile, sevenActive, direction: dir, currentPlayerIndex: idx, finishCounter,
+        ...(isClassic ? { lastPlayerIdx: wasPlayable ? myOnlineIndex : null } : {}),
         lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
         phase:      active.length <= 1 ? 'ended' : s.phase,
         loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
@@ -1661,6 +1954,10 @@ document.getElementById('btn-swap-ready').onclick = function () {
 function renderOnlineGame(state) {
   if (!state) return;
 
+  // During the MISTAKE animation, just cache the state for after it finishes
+  _lastOnlineState = state;
+  if (_mistakeAnimating) return;
+
   // Detect a new pile burn and show fire animation (non-blocking for online)
   const newBurnCount = (state.burnedPile || []).length;
   if (_prevOnlineBurnCount >= 0 && newBurnCount > _prevOnlineBurnCount) {
@@ -1668,34 +1965,43 @@ function renderOnlineGame(state) {
   }
   _prevOnlineBurnCount = newBurnCount;
 
-  _lastOnlineState = state;   // cache for sort-toggle re-render
+  const isClassic = state.gameMode === 'classic';
   const me       = state.players[state.myIndex];
   const isMyTurn = state.currentPlayerIndex === state.myIndex;
-  // If it's no longer the human's turn, clear any staged cards
-  if (!isMyTurn && selectedCards.length > 0) stageClear();
+  // If it's no longer the human's turn (and not Classic Mode), clear any staged cards
+  if (!isMyTurn && !isClassic && selectedCards.length > 0) stageClear();
   const humanPhase = me.finished ? 'done' :
     (state.hand.length > 0      ? 'hand'     :
      (me.faceUp.length > 0      ? 'faceUp'   :
       (state.faceDownCount > 0  ? 'faceDown' : 'done')));
 
+  // Status bar: hide current-turn info in Classic Mode
   document.getElementById('game-status-bar').textContent = (() => {
     if (state.phase === 'ended') return 'Game Over';
+    if (isClassic) return 'Classic Mode ⚡';
     if (isMyTurn) return 'Your turn!';
     return `${escHtml(state.players[state.currentPlayerIndex].name)}'s turn…`;
   })();
   document.getElementById('deck-num').textContent   = state.deckCount;
   document.getElementById('deck-count').textContent = state.deckCount;
-  document.getElementById('seven-warning').classList.toggle('hidden', !state.sevenActive);
+  // Direction badge and seven-warning hidden in Classic Mode
+  document.getElementById('seven-warning').classList.toggle('hidden', isClassic || !state.sevenActive);
   const dirEl = document.getElementById('direction-indicator');
-  if (dirEl) dirEl.textContent = (state.direction === -1) ? '↺' : '↻';
+  if (dirEl) {
+    dirEl.classList.toggle('hidden', isClassic);
+    dirEl.textContent = (state.direction === -1) ? '↺' : '↻';
+  }
 
   renderPile(state.pile);
   renderBurnedPile(state.burnedPile);
 
   document.getElementById('human-tableau-label').textContent = me.name;
 
+  // In Classic Mode every card in the correct phase is always interactive
+  const classicCanAct = isClassic && !me.finished;
   renderHumanStacks(state.faceDownCount, me.faceUp, {
-    isMyTurn, phase: humanPhase, pile: state.pile, sevenActive: state.sevenActive,
+    isMyTurn, alwaysAct: classicCanAct,
+    phase: humanPhase, pile: state.pile, sevenActive: state.sevenActive,
     onFaceDownClick: (i, el) => fbPlayFaceDown(i, el),
     onFaceUpClick:   card => onlineToggleSelect(card)
   });
@@ -1706,12 +2012,17 @@ function renderOnlineGame(state) {
   const handN = displayHand.length;
   const fanSpread = Math.min(44, handN * 5);
   displayHand.forEach((card, i) => {
-    const isStaged = selectedCards.some(c => c.id === card.id);
-    const canPlay  = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, state.pile, state.sevenActive);
-    const el = makeCardEl(card, { unplayable: isMyTurn && humanPhase === 'hand' && !canPlay && !isStaged });
+    const isStaged  = selectedCards.some(c => c.id === card.id);
+    const handClickable = isClassic
+      ? (humanPhase === 'hand' && !me.finished)
+      : (isMyTurn && humanPhase === 'hand');
+    const canPlay   = handClickable && isCardPlayable(card, state.pile, state.sevenActive);
+    // No unplayable dimming in Classic Mode
+    const showUnplayable = !isClassic && isMyTurn && humanPhase === 'hand' && !canPlay && !isStaged;
+    const el = makeCardEl(card, { unplayable: showUnplayable });
     if (isStaged) {
       el.classList.add('staged-out');
-    } else if (isMyTurn && humanPhase === 'hand') {
+    } else if (handClickable) {
       el.onclick = () => onlineToggleSelect(card);
     }
     const angle = handN > 1 ? ((i / (handN - 1)) - 0.5) * fanSpread : 0;
@@ -1720,7 +2031,10 @@ function renderOnlineGame(state) {
     handZone.appendChild(el);
   });
 
-  const canAct = isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp');
+  // Button visibility: Classic Mode removes the turn requirement
+  const canAct = isClassic
+    ? (!me.finished && (humanPhase === 'hand' || humanPhase === 'faceUp'))
+    : (isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp'));
   document.getElementById('btn-play-selected').classList.toggle('btn-action-dim', !canAct || selectedCards.length === 0);
   document.getElementById('btn-pickup').classList.toggle('btn-action-dim', !canAct || state.pile.length === 0);
 
@@ -1823,7 +2137,8 @@ async function cleanupExpiredRooms() {
 //  Navigation / Menu events
 // ═══════════════════════════════════════════════════════
 document.getElementById('btn-vs-bots').onclick     = () => showScreen('screen-local-setup');
-document.getElementById('btn-online').onclick      = () => { showScreen('screen-online'); cleanupExpiredRooms(); };
+document.getElementById('btn-pathetic').onclick    = () => { _pendingOnlineMode = 'pathetic'; showScreen('screen-online'); cleanupExpiredRooms(); };
+document.getElementById('btn-classic').onclick     = () => { _pendingOnlineMode = 'classic';  showScreen('screen-online'); cleanupExpiredRooms(); };
 document.getElementById('btn-local-back').onclick  = () => showScreen('screen-menu');
 document.getElementById('btn-online-back').onclick = () => showScreen('screen-menu');
 document.getElementById('btn-local-start').onclick = () => startLocalGame();
@@ -1910,3 +2225,22 @@ document.getElementById('pile-modal').addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.getElementById('pile-modal').classList.add('hidden');
 });
+
+// ═══════════════════════════════════════════════════════
+//  Classic Mode — deck drag (draw one card per drag to hand)
+//  Attaches once; _deckBeginDrag gates on OG?.gameMode === 'classic'.
+// ═══════════════════════════════════════════════════════
+(function setupDeckDrag() {
+  const deckEl = document.getElementById('deck-visual');
+  if (!deckEl) return;
+  deckEl.addEventListener('mousedown', e => {
+    if (OG?.gameMode !== 'classic') return;
+    e.preventDefault();
+    _deckBeginDrag(e.clientX, e.clientY);
+  });
+  deckEl.addEventListener('touchstart', e => {
+    if (OG?.gameMode !== 'classic') return;
+    e.preventDefault();
+    _deckBeginDrag(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: false });
+})();

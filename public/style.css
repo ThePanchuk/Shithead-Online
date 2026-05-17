@@ -971,6 +971,27 @@ a { color: #7ec88a; }
   100% { transform: scaleX(0.9)  scaleY(0.3) rotate(-2deg); opacity: 0;    }
 }
 
+/* ── Classic Mode button ── */
+.btn-classic {
+  background: linear-gradient(135deg, #1a0530 0%, #2e0d50 100%);
+  color: #c084fc;
+  border: 1px solid #7c3aed;
+  font-weight: 700;
+}
+.btn-classic:hover  { background: linear-gradient(135deg, #2a0a4a 0%, #3e1068 100%); color: #d8b4fe; border-color: #a855f7; }
+.btn-classic:active { background: linear-gradient(135deg, #1a0530 0%, #2e0d50 100%); }
+
+/* ── MISTAKE animation ── */
+@keyframes mistake-shake {
+  0%   { transform: scale(0.8) rotate(0deg);    }
+  15%  { transform: scale(1.1) rotate(-3deg);   }
+  30%  { transform: scale(1.08) rotate(3deg);   }
+  45%  { transform: scale(1.06) rotate(-2deg);  }
+  60%  { transform: scale(1.04) rotate(2deg);   }
+  75%  { transform: scale(1.02) rotate(-1deg);  }
+  100% { transform: scale(1)   rotate(0deg);    }
+}
+
 @keyframes stage-card-in {
   from { transform: scale(0.55) translateY(40px); opacity: 0; }
   to   { transform: scale(1)    translateY(0);    opacity: 1; }
