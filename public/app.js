@@ -15,6 +15,23 @@ let myOnlineIndex = null;
 // Settings
 let useSevenRule = true;
 
+// Hand sort mode — 'rank' (by number) or 'suit' (by suit then number)
+let handSortMode = 'rank';
+const SUIT_ORDER  = { '♣': 0, '♦': 1, '♥': 2, '♠': 3 };
+
+function sortedHand(hand) {
+  const h = [...hand]; // never mutate the game-state array
+  if (handSortMode === 'suit') {
+    h.sort((a, b) => (SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]) || (a.value - b.value));
+  } else {
+    h.sort((a, b) => (a.value - b.value) || (SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]));
+  }
+  return h;
+}
+
+// Cached last online game state — used to re-render when sort mode changes mid-game
+let _lastOnlineState = null;
+
 // ═══════════════════════════════════════════════════════
 //  Utilities
 // ═══════════════════════════════════════════════════════
@@ -377,9 +394,10 @@ function renderLocalGame() {
 
   const handZone = document.getElementById('human-hand');
   handZone.innerHTML = '';
-  const handN = human.hand.length;
+  const displayHand = sortedHand(human.hand);
+  const handN = displayHand.length;
   const fanSpread = Math.min(44, handN * 5);
-  human.hand.forEach((card, i) => {
+  displayHand.forEach((card, i) => {
     const canPlay = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, LG.pile, LG.sevenActive);
     const sel = selectedCards.some(c => c.id === card.id);
     const el = makeCardEl(card, { selected: sel, unplayable: isMyTurn && humanPhase === 'hand' && !canPlay });
@@ -987,6 +1005,7 @@ document.getElementById('btn-swap-ready').onclick = function () {
 
 function renderOnlineGame(state) {
   if (!state) return;
+  _lastOnlineState = state;   // cache for sort-toggle re-render
   const me       = state.players[state.myIndex];
   const isMyTurn = state.currentPlayerIndex === state.myIndex;
   const humanPhase = me.finished ? 'done' :
@@ -1018,9 +1037,10 @@ function renderOnlineGame(state) {
 
   const handZone = document.getElementById('human-hand');
   handZone.innerHTML = '';
-  const handN = state.hand.length;
+  const displayHand = sortedHand(state.hand);
+  const handN = displayHand.length;
   const fanSpread = Math.min(44, handN * 5);
-  state.hand.forEach((card, i) => {
+  displayHand.forEach((card, i) => {
     const canPlay = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, state.pile, state.sevenActive);
     const sel = selectedCards.some(c => c.id === card.id);
     const el = makeCardEl(card, { selected: sel, unplayable: isMyTurn && humanPhase === 'hand' && !canPlay });
@@ -1053,6 +1073,14 @@ function onlineToggleSelect(card) {
   }
   renderOnlineGame(OG);
 }
+
+// ─── Hand sort toggle ──────────────────────────────────
+
+document.getElementById('sort-by-suit').addEventListener('change', function () {
+  handSortMode = this.checked ? 'suit' : 'rank';
+  if (mode === 'local'  && LG)               renderLocalGame();
+  if (mode === 'online' && _lastOnlineState) renderOnlineGame(_lastOnlineState);
+});
 
 // ─── Play / Pick-up buttons ────────────────────────────
 
