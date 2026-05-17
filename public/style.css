@@ -113,8 +113,11 @@ a { color: #7ec88a; }
 .screen.active { display: flex; flex-direction: column; }
 
 #screen-game.active {
-  height: 100dvh;       /* dynamic viewport height */
-  height: 100vh;        /* fallback */
+  /* position:fixed + inset:0 locks the element to the viewport by geometry —
+     immune to content height, dvh fluctuations, and browser-chrome animations */
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: 0;   /* inset:0 fallback for older browsers */
+  inset: 0;
   min-height: unset;
   overflow: hidden;
   padding: 0;
