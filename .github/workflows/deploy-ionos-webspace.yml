@@ -22,6 +22,7 @@ jobs:
           sudo apt-get install -y lftp
           lftp -c "
             set sftp:auto-confirm yes;
+            set sftp:connect-program \"ssh -a -x -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\";
             set net:timeout 15;
             set net:max-retries 3;
             open -u \"$FTP_USER\",\"$FTP_PASS\" sftp://\"$FTP_HOST\";
