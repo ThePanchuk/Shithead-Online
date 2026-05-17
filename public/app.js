@@ -128,7 +128,7 @@ function stageAdd(card) {
 // Remove a card from the stage and return it to the hand
 function stageRemove(card) {
   const stage = document.getElementById('card-stage');
-  const el = [...stage.querySelectorAll('.card')].find(e => e.dataset.id === card.id);
+  const el = [...stage.querySelectorAll('.card')].find(e => e.dataset.id === String(card.id));
   if (el) {
     // 1. Cancel the stage-card-in animation (animation-fill-mode:both keeps its
     //    final values locked above inline styles in the cascade — clearing the
