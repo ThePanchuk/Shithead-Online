@@ -32,6 +32,19 @@ function sortedHand(hand) {
 // Cached last online game state — used to re-render when sort mode changes mid-game
 let _lastOnlineState = null;
 
+// ─── Burn context ──────────────────────────────────────
+// Tells burnPileAnimation what triggered the burn so it can pick the right variant.
+//   { type: 'ten' }
+//   { type: 'quad', cards: [{suit,rank,id,value}, ...4 cards] }
+//   null  → generic (fall back to the 4 original variants)
+function computeBurnContext(playedCards, pileBeforePlay) {
+  if (!playedCards || !playedCards.length) return null;
+  if (playedCards[0].rank === '10') return { type: 'ten' };
+  const rank     = playedCards[0].rank;
+  const matching = [...(pileBeforePlay || []).filter(c => c.rank === rank), ...playedCards].slice(-4);
+  return { type: 'quad', cards: matching };
+}
+
 // Track burned-pile length across online renders to detect new burns
 let _prevOnlineBurnCount = -1;
 
@@ -117,7 +130,16 @@ function flyCardsToPile(cards, rects) {
 // ═══════════════════════════════════════════════════════
 //  Pile-burn animations  — 4 variants, one chosen at random
 // ═══════════════════════════════════════════════════════
-function burnPileAnimation() {
+function burnPileAnimation(context) {
+  // Ten-specific animations
+  if (context?.type === 'ten') {
+    return (Math.random() < 0.5 ? _burnVariant_ten_stamp : _burnVariant_ten_shockwave)();
+  }
+  // Four-of-a-kind animations (need the 4 cards)
+  if (context?.type === 'quad' && context.cards?.length >= 4) {
+    return (Math.random() < 0.5 ? _burnVariant_quad_burn : _burnVariant_quad_slam)(context.cards);
+  }
+  // Generic — original 4 variants
   const variants = [
     _burnVariant_inferno,    // orange Doom fire
     _burnVariant_arcane,     // blue-purple arcane flame
@@ -535,6 +557,487 @@ function _burnVariant_vortex() {
     }
 
     requestAnimationFrame(frame);
+  });
+}
+
+// ─── Variant 5: Ten stamp (orange inferno + giant "10") ──
+function _burnVariant_ten_stamp() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+
+    const DURATION = 2500;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    // Doom fire canvas (same palette as inferno)
+    const FW = Math.round(rect.width * 2.8);
+    const FH = Math.round(rect.height * 4.2);
+    const SCALE = 3;
+    const CW = Math.ceil(FW / SCALE), CH = Math.ceil(FH / SCALE);
+    const canvas = document.createElement('canvas');
+    canvas.width = CW; canvas.height = CH;
+    canvas.style.cssText = [
+      'position:absolute',
+      `left:${Math.round(cx - FW/2)}px`,
+      `top:${Math.round(rect.bottom - FH)}px`,
+      `width:${FW}px`, `height:${FH}px`,
+      'image-rendering:pixelated;image-rendering:crisp-edges',
+    ].join(';');
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const pal = new Uint8ClampedArray(256 * 4);
+    for (let i = 1; i < 256; i++) {
+      const t = i / 255;
+      pal[i*4]   = Math.min(255, (t * 3 * 255) | 0);
+      pal[i*4+1] = t < 0.35 ? 0 : Math.min(255, (((t-0.35)/0.65)*255) | 0);
+      pal[i*4+2] = t < 0.78 ? 0 : Math.min(255, (((t-0.78)/0.22)*255) | 0);
+      pal[i*4+3] = Math.min(255, (Math.min(1, t*2.2)*255) | 0);
+    }
+    const buf = new Uint8Array(CW * CH);
+    const imgData = ctx.createImageData(CW, CH);
+    const pd = imgData.data;
+
+    // Giant "10" stamp — pops in, holds, then fades upward
+    const tenEl = document.createElement('div');
+    tenEl.textContent = '10';
+    tenEl.style.cssText = [
+      'position:absolute', `left:${cx}px`, `top:${cy}px`,
+      'transform:translate(-50%,-50%) scale(0)',
+      'transition:transform 0.18s cubic-bezier(0.1,0,0.1,1.6)',
+      'font-size:min(200px,38vw)', 'font-weight:900',
+      'color:rgba(255,235,70,0.96)',
+      'text-shadow:0 0 35px rgba(255,120,0,1),0 0 70px rgba(255,50,0,0.7)',
+      'font-family:sans-serif', 'letter-spacing:-0.04em', 'line-height:1',
+    ].join(';');
+    wrap.appendChild(tenEl);
+
+    // CSS flame tongues
+    for (let i = 0; i < 10; i++) {
+      const fl = document.createElement('div');
+      const w  = (14 + Math.random() * 28) | 0;
+      const h  = (w  * (1.5 + Math.random())) | 0;
+      const x  = (FW * 0.05 + Math.random() * FW * 0.9 - w / 2) | 0;
+      const dur = (0.42 + Math.random() * 0.44).toFixed(2);
+      const del = (Math.random() * 0.55).toFixed(2);
+      fl.style.cssText = [
+        'position:absolute',
+        `left:${Math.round(cx - FW/2) + x}px`, 'bottom:' + Math.round(window.innerHeight - rect.bottom) + 'px',
+        `width:${w}px`, `height:${h}px`,
+        'border-radius:50% 50% 30% 30% / 55% 55% 45% 45%',
+        'transform-origin:50% 100%',
+        'background:radial-gradient(ellipse at 50% 80%,#ffe566 0%,#ff5500 45%,#cc1000 78%,transparent 100%)',
+        `animation:pile-flame-rise ${dur}s ease-in-out ${del}s infinite`,
+        'mix-blend-mode:screen',
+      ].join(';');
+      wrap.appendChild(fl);
+    }
+
+    // Stamp in the "10" after a brief delay
+    setTimeout(() => {
+      tenEl.style.transform = 'translate(-50%,-50%) scale(1)';
+      setTimeout(() => {
+        tenEl.style.transition = 'transform 0.55s ease-in, opacity 0.45s ease-in 0.1s';
+        tenEl.style.transform  = 'translate(-50%,-50%) scale(1.35)';
+        tenEl.style.opacity    = '0';
+      }, 750);
+    }, 150);
+
+    const t0 = performance.now();
+    function frame(now) {
+      const elapsed  = now - t0;
+      const progress = elapsed / DURATION;
+      const maxHeat  = progress < 0.65
+        ? 220 + ((Math.random() * 35) | 0)
+        : Math.max(0, ((1 - (progress - 0.65) / 0.35) * 245) | 0);
+      for (let x = 0; x < CW; x++)
+        buf[(CH-1)*CW+x] = maxHeat > 8 ? Math.max(0, maxHeat - ((Math.random()*45)|0)) : 0;
+      for (let y = 0; y < CH - 1; y++) {
+        for (let x = 0; x < CW; x++) {
+          const drift = (Math.random() * 3) | 0;
+          const srcX  = Math.min(CW-1, Math.max(0, x - drift + 1));
+          buf[y*CW+x] = Math.max(0, buf[(y+1)*CW+srcX] - (drift & 1));
+        }
+      }
+      for (let i = 0; i < CW * CH; i++) {
+        const pi = buf[i] * 4;
+        pd[i*4] = pal[pi]; pd[i*4+1] = pal[pi+1]; pd[i*4+2] = pal[pi+2]; pd[i*4+3] = pal[pi+3];
+      }
+      ctx.putImageData(imgData, 0, 0);
+      if (elapsed < DURATION) {
+        requestAnimationFrame(frame);
+      } else {
+        wrap.style.transition = 'opacity 0.3s';
+        wrap.style.opacity    = '0';
+        setTimeout(() => { wrap.remove(); resolve(); }, 350);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// ─── Variant 6: Ten shockwave (golden rings + particles + "10") ──
+function _burnVariant_ten_shockwave() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+
+    const DURATION = 2200;
+    const cx = rect.left + rect.width  / 2;
+    const cy = rect.top  + rect.height / 2;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    // Central burst flash
+    const flash = document.createElement('div');
+    const FR = rect.width * 1.6;
+    flash.style.cssText = [
+      'position:absolute',
+      `left:${cx - FR}px`, `top:${cy - FR}px`,
+      `width:${FR*2}px`, `height:${FR*2}px`,
+      'border-radius:50%',
+      'background:radial-gradient(circle,rgba(255,250,180,.97) 0%,rgba(255,180,0,.8) 30%,rgba(255,80,0,.4) 60%,transparent 80%)',
+      'transform:scale(0)', 'transition:transform 0.13s ease-out',
+    ].join(';');
+    wrap.appendChild(flash);
+
+    // "10" text
+    const tenEl = document.createElement('div');
+    tenEl.textContent = '10';
+    tenEl.style.cssText = [
+      'position:absolute', `left:${cx}px`, `top:${cy}px`,
+      'transform:translate(-50%,-50%) scale(0)',
+      'transition:transform 0.16s cubic-bezier(0.1,0,0.1,1.8)',
+      'font-size:min(170px,33vw)', 'font-weight:900',
+      'color:#fff',
+      'text-shadow:0 0 28px rgba(255,210,50,1),0 0 55px rgba(255,120,0,0.85)',
+      'font-family:sans-serif', 'letter-spacing:-0.04em', 'line-height:1',
+    ].join(';');
+    wrap.appendChild(tenEl);
+
+    // 3 expanding shockwave rings
+    for (let ri = 0; ri < 3; ri++) {
+      const R   = rect.width * (0.55 + ri * 0.6);
+      const ring = document.createElement('div');
+      ring.style.cssText = [
+        'position:absolute',
+        `left:${cx - R}px`, `top:${cy - R}px`,
+        `width:${R*2}px`, `height:${R*2}px`,
+        'border-radius:50%',
+        `border:${3 - ri}px solid rgba(255,210,80,.85)`,
+        'box-shadow:0 0 14px rgba(255,150,0,.6)',
+        'transform:scale(0.08)',
+        `transition:transform 0.65s ease-out ${ri*0.16}s,opacity 0.4s ease-out ${0.25+ri*0.16}s`,
+        'opacity:1',
+      ].join(';');
+      wrap.appendChild(ring);
+      setTimeout(() => {
+        ring.style.transform = `scale(${2.0 + ri * 0.5})`;
+        ring.style.opacity   = '0';
+      }, 40);
+    }
+
+    // Particle burst
+    for (let i = 0; i < 28; i++) {
+      const p   = document.createElement('div');
+      const ang = (i / 28) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const d   = 60 + Math.random() * 155;
+      const sz  = (3 + Math.random() * 8) | 0;
+      const dur = (0.45 + Math.random() * 0.5).toFixed(2);
+      const del = (Math.random() * 0.12).toFixed(2);
+      const hue = (20 + Math.random() * 40) | 0;
+      p.style.cssText = [
+        'position:absolute',
+        `left:${cx - sz/2}px`, `top:${cy - sz/2}px`,
+        `width:${sz}px`, `height:${sz}px`,
+        `border-radius:${Math.random() > 0.45 ? '50%' : '2px'}`,
+        `background:hsl(${hue},100%,${(55+Math.random()*20)|0}%)`,
+        `box-shadow:0 0 ${sz*2}px hsla(${hue},100%,65%,.7)`,
+        'transform:translate(0,0) scale(1)',
+        `transition:transform ${dur}s ease-out ${del}s,opacity ${dur}s ease-out ${del}s`,
+      ].join(';');
+      wrap.appendChild(p);
+      setTimeout(() => {
+        p.style.transform = `translate(${(Math.cos(ang)*d).toFixed(1)}px,${(Math.sin(ang)*d).toFixed(1)}px) scale(0)`;
+        p.style.opacity   = '0';
+      }, 40);
+    }
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      flash.style.transform = 'scale(1)';
+      tenEl.style.transform = 'translate(-50%,-50%) scale(1)';
+      setTimeout(() => {
+        flash.style.transition = 'opacity 0.4s ease-out';
+        flash.style.opacity    = '0';
+      }, 130);
+      setTimeout(() => {
+        tenEl.style.transition = 'transform 0.6s ease-in,opacity 0.5s ease-in 0.08s';
+        tenEl.style.transform  = 'translate(-50%,-50%) scale(1.5)';
+        tenEl.style.opacity    = '0';
+      }, 650);
+    }));
+
+    setTimeout(() => {
+      wrap.style.transition = 'opacity 0.3s';
+      wrap.style.opacity    = '0';
+      setTimeout(() => { wrap.remove(); resolve(); }, 320);
+    }, DURATION - 320);
+  });
+}
+
+// ─── Variant 7: Quad inferno (4 cards appear then get devoured by fire) ──
+function _burnVariant_quad_burn(cards) {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+
+    const DURATION = 2700;
+    const cs    = getComputedStyle(document.documentElement);
+    const cardW = parseFloat(cs.getPropertyValue('--card-w'));
+    const cardH = parseFloat(cs.getPropertyValue('--card-h'));
+    const gap   = cardW * 0.18;   // slight overlap
+    const cx    = rect.left + rect.width / 2;
+    const rowW  = 4 * cardW + 3 * gap;
+    const rowX  = cx - rowW / 2;
+    const rowY  = rect.top - cardH * 1.25;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    // Place 4 card elements in a horizontal row above the pile
+    cards.slice(0, 4).forEach((card, i) => {
+      const el = makeCardEl(card);
+      const x  = rowX + i * (cardW + gap);
+      el.style.position      = 'fixed';
+      el.style.left          = '0';
+      el.style.top           = '0';
+      el.style.width         = cardW + 'px';
+      el.style.height        = cardH + 'px';
+      el.style.transform     = `translate(${x}px,${rowY - 30}px) scale(0.55)`;
+      el.style.opacity       = '0';
+      el.style.transition    = `transform 0.3s cubic-bezier(0.2,0,0.3,1) ${i*0.06}s,opacity 0.25s ease-out ${i*0.06}s`;
+      el.style.pointerEvents = 'none';
+      el.style.zIndex        = '1601';
+      document.body.appendChild(el);
+      // Slide into position
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.transform = `translate(${x}px,${rowY}px) scale(1)`;
+        el.style.opacity   = '1';
+      }));
+      // Burn away after hold
+      setTimeout(() => {
+        el.style.transition = 'transform 0.6s ease-in,opacity 0.55s ease-in';
+        el.style.transform  = `translate(${x}px,${rowY + 18}px) scale(0.82)`;
+        el.style.opacity    = '0';
+        setTimeout(() => el.remove(), 700);
+      }, 1000 + i * 40);
+    });
+
+    // Doom fire canvas (orange — same as inferno)
+    const FW = Math.round(Math.max(rowW * 1.6, rect.width * 2.8));
+    const FH = Math.round((cardH * 1.4 + rect.height) * 3.2);
+    const SCALE = 3;
+    const CW = Math.ceil(FW / SCALE), CH = Math.ceil(FH / SCALE);
+    const canvas = document.createElement('canvas');
+    canvas.width = CW; canvas.height = CH;
+    canvas.style.cssText = [
+      'position:absolute',
+      `left:${Math.round(cx - FW/2)}px`,
+      `top:${Math.round(rect.bottom - FH)}px`,
+      `width:${FW}px`, `height:${FH}px`,
+      'image-rendering:pixelated;image-rendering:crisp-edges',
+    ].join(';');
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    const pal = new Uint8ClampedArray(256 * 4);
+    for (let i = 1; i < 256; i++) {
+      const t = i / 255;
+      pal[i*4]   = Math.min(255, (t * 3 * 255) | 0);
+      pal[i*4+1] = t < 0.35 ? 0 : Math.min(255, (((t-0.35)/0.65)*255) | 0);
+      pal[i*4+2] = t < 0.78 ? 0 : Math.min(255, (((t-0.78)/0.22)*255) | 0);
+      pal[i*4+3] = Math.min(255, (Math.min(1, t*2.2)*255) | 0);
+    }
+    const buf = new Uint8Array(CW * CH);
+    const imgData = ctx.createImageData(CW, CH);
+    const pd = imgData.data;
+
+    const t0 = performance.now();
+    function frame(now) {
+      const elapsed  = now - t0;
+      const progress = elapsed / DURATION;
+      // Fire delays ~200ms so cards are visible first
+      const fp = Math.max(0, (elapsed - 200) / (DURATION - 200));
+      const maxHeat = fp < 0.65
+        ? 215 + ((Math.random() * 40) | 0)
+        : Math.max(0, ((1 - (fp - 0.65) / 0.35) * 245) | 0);
+      for (let x = 0; x < CW; x++)
+        buf[(CH-1)*CW+x] = maxHeat > 8 ? Math.max(0, maxHeat - ((Math.random()*45)|0)) : 0;
+      for (let y = 0; y < CH - 1; y++) {
+        for (let x = 0; x < CW; x++) {
+          const drift = (Math.random() * 3) | 0;
+          const srcX  = Math.min(CW-1, Math.max(0, x - drift + 1));
+          buf[y*CW+x] = Math.max(0, buf[(y+1)*CW+srcX] - (drift & 1));
+        }
+      }
+      for (let i = 0; i < CW * CH; i++) {
+        const pi = buf[i] * 4;
+        pd[i*4] = pal[pi]; pd[i*4+1] = pal[pi+1]; pd[i*4+2] = pal[pi+2]; pd[i*4+3] = pal[pi+3];
+      }
+      ctx.putImageData(imgData, 0, 0);
+      if (elapsed < DURATION) {
+        requestAnimationFrame(frame);
+      } else {
+        wrap.style.transition = 'opacity 0.3s';
+        wrap.style.opacity    = '0';
+        setTimeout(() => { wrap.remove(); resolve(); }, 350);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// ─── Variant 8: Quad slam (4 cards smash together → explosion) ──
+function _burnVariant_quad_slam(cards) {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+
+    const DURATION = 2000;
+    const cs    = getComputedStyle(document.documentElement);
+    const cardW = parseFloat(cs.getPropertyValue('--card-w'));
+    const cardH = parseFloat(cs.getPropertyValue('--card-h'));
+    const cx    = rect.left + rect.width  / 2;
+    const cy    = rect.top  + rect.height / 2;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    // 4 cards start at scattered positions around the pile, rotated
+    const spread = Math.max(cardW * 3.5, rect.width * 1.8);
+    const startOffsets = [
+      [-spread, -spread * 0.7,  -18],
+      [ spread, -spread * 0.7,   18],
+      [-spread,  spread * 0.7,  -14],
+      [ spread,  spread * 0.7,   14],
+    ];
+
+    const cardEls = cards.slice(0, 4).map((card, i) => {
+      const el  = makeCardEl(card);
+      const [dx, dy, rot] = startOffsets[i];
+      el.style.position      = 'fixed';
+      el.style.left          = '0';
+      el.style.top           = '0';
+      el.style.width         = cardW + 'px';
+      el.style.height        = cardH + 'px';
+      el.style.transform     = `translate(${cx - cardW/2 + dx}px,${cy - cardH/2 + dy}px) rotate(${rot}deg) scale(0.9)`;
+      el.style.transition    = 'none';
+      el.style.pointerEvents = 'none';
+      el.style.zIndex        = '1601';
+      document.body.appendChild(el);
+      return { el, dx, dy, rot };
+    });
+
+    // Central flash (starts hidden)
+    const FR = rect.width * 2.0;
+    const flash = document.createElement('div');
+    flash.style.cssText = [
+      'position:absolute',
+      `left:${cx - FR}px`, `top:${cy - FR}px`,
+      `width:${FR*2}px`, `height:${FR*2}px`,
+      'border-radius:50%',
+      'background:radial-gradient(circle,rgba(255,250,200,.98) 0%,rgba(255,200,0,.8) 28%,rgba(255,80,0,.45) 58%,transparent 80%)',
+      'transform:scale(0)', 'opacity:0',
+    ].join(';');
+    wrap.appendChild(flash);
+
+    // Particles (hidden until slam)
+    const NPARTS = 32;
+    const parts = Array.from({ length: NPARTS }, (_, i) => {
+      const p   = document.createElement('div');
+      const ang = (i / NPARTS) * Math.PI * 2;
+      const d   = 70 + Math.random() * 180;
+      const sz  = (3 + Math.random() * 9) | 0;
+      const hue = (10 + Math.random() * 45) | 0;
+      p._tx  = (Math.cos(ang) * d).toFixed(1);
+      p._ty  = (Math.sin(ang) * d).toFixed(1);
+      p.style.cssText = [
+        'position:absolute',
+        `left:${cx - sz/2}px`, `top:${cy - sz/2}px`,
+        `width:${sz}px`, `height:${sz}px`,
+        `border-radius:${Math.random() > 0.45 ? '50%' : '3px'}`,
+        `background:hsl(${hue},100%,${(55+Math.random()*20)|0}%)`,
+        `box-shadow:0 0 ${sz*2}px hsla(${hue},100%,65%,.7)`,
+        'transform:translate(0,0) scale(1)',
+        'opacity:0',
+      ].join(';');
+      wrap.appendChild(p);
+      return p;
+    });
+
+    // Step 1: slam cards into center
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      cardEls.forEach(({ el }) => {
+        el.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.6,1)';
+        el.style.transform  = `translate(${cx - cardW/2}px,${cy - cardH/2}px) rotate(0deg) scale(1.05)`;
+      });
+    }));
+
+    // Step 2: impact flash + scatter cards + burst particles
+    setTimeout(() => {
+      // Flash in
+      flash.style.transition = 'transform 0.1s ease-out,opacity 0.1s ease-out';
+      flash.style.transform  = 'scale(1)';
+      flash.style.opacity    = '1';
+
+      // Burst particles
+      const dur = (0.5 + Math.random() * 0.5).toFixed(2);
+      const del = (0.02).toFixed(2);
+      parts.forEach(p => {
+        p.style.opacity    = '1';
+        p.style.transition = `transform ${dur}s ease-out ${del}s,opacity ${dur}s ease-out ${del}s`;
+        p.style.transform  = `translate(${p._tx}px,${p._ty}px) scale(0)`;
+        setTimeout(() => { p.style.opacity = '0'; }, 50);
+      });
+
+      // Scatter cards outward with burn
+      cardEls.forEach(({ el, dx, dy }) => {
+        const ox = (dx < 0 ? -1 : 1) * (cardW * 0.6 + Math.random() * cardW * 0.5);
+        const oy = (dy < 0 ? -1 : 1) * (cardH * 0.5 + Math.random() * cardH * 0.4);
+        el.style.transition = 'transform 0.55s ease-out,opacity 0.45s ease-out 0.06s';
+        el.style.transform  = `translate(${cx - cardW/2 + ox}px,${cy - cardH/2 + oy}px) rotate(${(Math.random()-0.5)*40}deg) scale(0.5)`;
+        el.style.opacity    = '0';
+        setTimeout(() => el.remove(), 700);
+      });
+
+      // Fade flash
+      setTimeout(() => {
+        flash.style.transition = 'opacity 0.45s ease-out';
+        flash.style.opacity    = '0';
+      }, 110);
+    }, 330);
+
+    setTimeout(() => {
+      wrap.style.transition = 'opacity 0.3s';
+      wrap.style.opacity    = '0';
+      setTimeout(() => { wrap.remove(); resolve(); }, 320);
+    }, DURATION - 320);
   });
 }
 
@@ -1095,6 +1598,7 @@ async function botTakeTurn(botIdx) {
     const srcRect = getBotSlotRect();
     p.faceDown.splice(0, 1);
     let didBurn = false;
+    let botFdPileSnap = null;
     if (!isCardPlayable(card, LG.pile, LG.sevenActive)) {
       p.hand.push(card, ...LG.pile);
       LG.pile = [];
@@ -1102,6 +1606,7 @@ async function botTakeTurn(botIdx) {
       localAdvanceTurn(botIdx);
     } else {
       if (srcRect) flyCardsToPile([card], [srcRect]);
+      botFdPileSnap = [...LG.pile];
       const res = resolvePlay([card], LG.pile, LG.sevenActive);
       if (res.burned) {
         LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
@@ -1112,16 +1617,17 @@ async function botTakeTurn(botIdx) {
       localCheckFinished(botIdx);
       applyLocalTurnChange(botIdx, res);
     }
-    if (didBurn) await burnPileAnimation();
+    if (didBurn) await burnPileAnimation(computeBurnContext([card], botFdPileSnap));
     afterBotAction();
     return;
   }
 
   if (decision.action === 'play') {
     const srcRect = getBotSlotRect();
+    const botPlayPileSnap = [...LG.pile];
     const res = localApplyPlay(botIdx, decision.cards);
     if (srcRect) flyCardsToPile(decision.cards, [srcRect]);
-    if (res.burned) await burnPileAnimation();
+    if (res.burned) await burnPileAnimation(computeBurnContext(decision.cards, botPlayPileSnap));
     applyLocalTurnChange(botIdx, res);
     afterBotAction();
   }
@@ -1255,6 +1761,7 @@ async function humanPlayFaceDown(faceDownIdx, srcEl) {
   const centerRect = await flipFaceDownAnimation(card, srcRect);
 
   let didBurn = false;
+  let pileSnapshot = null;
   if (!isCardPlayable(card, LG.pile, LG.sevenActive)) {
     p.hand.push(card, ...LG.pile);
     LG.pile = [];
@@ -1264,6 +1771,7 @@ async function humanPlayFaceDown(faceDownIdx, srcEl) {
   } else {
     // Fly the revealed card from the flip-centre position into the pile
     flyCardsToPile([card], [centerRect]);
+    pileSnapshot = [...LG.pile];
     const res = resolvePlay([card], LG.pile, LG.sevenActive);
     if (res.burned) {
       LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
@@ -1275,7 +1783,7 @@ async function humanPlayFaceDown(faceDownIdx, srcEl) {
     localCheckGameOver();
     if (LG.phase !== 'ended') applyLocalTurnChange(0, res);
   }
-  if (didBurn) await burnPileAnimation();
+  if (didBurn) await burnPileAnimation(computeBurnContext([card], pileSnapshot));
   stageClear();
   renderLocalGame();
   if (LG.phase === 'ended') showGameOver();
@@ -1650,7 +2158,7 @@ async function startOnlineGame() {
       phase: 'swap', deck: dealt.remainingDeck,
       gameMode: d.gameMode || 'pathetic',
       pile: [], burnedPile: [], sevenActive: false, direction: 1, finishCounter: 1, loserIndex: null,
-      mistake: null, lastPlayerIdx: null,
+      mistake: null, lastPlayerIdx: null, burnCause: null,
       lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
       players: d.players.map((p, i) => ({
         ...p, swapReady: false, finished: false, finishOrder: null,
@@ -1725,6 +2233,7 @@ async function fbPlayCards(cards) {
         const res  = resolvePlay(cards, s.pile, s.sevenActive);
         const burnedPile = [...(s.burnedPile || [])];
         if (res.burned) burnedPile.push(...(s.pile || []), ...cards);
+        const burnCause = res.burned ? computeBurnContext(cards, s.pile) : null;
         const deck = [...(s.deck || [])];
         if (phase === 'hand') while (me.hand.length < 3 && deck.length) me.hand.push(deck.pop());
         let finishCounter = s.finishCounter || 1;
@@ -1735,7 +2244,7 @@ async function fbPlayCards(cards) {
         const active = players.filter(p => !p.finished);
         t.update(roomRef(currentRoomCode), {
           players, pile: res.newPile, burnedPile, sevenActive: res.newSevenActive, deck,
-          direction: dir, currentPlayerIndex: idx, finishCounter,
+          direction: dir, currentPlayerIndex: idx, finishCounter, burnCause,
           lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
           phase:      active.length <= 1 ? 'ended' : s.phase,
           loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
@@ -1761,7 +2270,7 @@ async function fbPlayCards(cards) {
           players, pile: [], sevenActive: false,
           currentPlayerIndex: idx,
           mistake: { playerIdx: myOnlineIndex, seq: mistakeSeq },
-          lastPlayerIdx: null,
+          lastPlayerIdx: null, burnCause: null,
           lastActivity: firebase.firestore.FieldValue.serverTimestamp()
         });
         return;
@@ -1774,6 +2283,7 @@ async function fbPlayCards(cards) {
       const res = resolvePlay(cards, s.pile, s.sevenActive);
       const burnedPile = [...(s.burnedPile || [])];
       if (res.burned) burnedPile.push(...(s.pile || []), ...cards);
+      const burnCause = res.burned ? computeBurnContext(cards, s.pile) : null;
       const deck = [...(s.deck || [])];
       // Classic Mode: NO auto-draw — players draw manually
 
@@ -1805,7 +2315,7 @@ async function fbPlayCards(cards) {
           players, pile, burnedPile, sevenActive, deck,
           direction, currentPlayerIndex: idx, finishCounter,
           mistake: { playerIdx: lastPIdx, seq: mistakeSeq },
-          lastPlayerIdx: null,
+          lastPlayerIdx: null, burnCause: null,
           lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
           phase:      active.length <= 1 ? 'ended' : s.phase,
           loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
@@ -1820,7 +2330,7 @@ async function fbPlayCards(cards) {
         players, pile, burnedPile, sevenActive, deck,
         direction: dir, currentPlayerIndex: idx, finishCounter,
         mistake: s.mistake || null,
-        lastPlayerIdx: myOnlineIndex,
+        lastPlayerIdx: myOnlineIndex, burnCause,
         lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
         phase:      active.length <= 1 ? 'ended' : s.phase,
         loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
@@ -1891,13 +2401,18 @@ async function fbPlayFaceDown(index, srcEl) {
       let res = { reverseDirection: false, extraTurn: false, skipCount: 0, newSevenActive: false };
       const burnedPile = [...(s.burnedPile || [])];
       const wasPlayable = isCardPlayable(card, pile, sevenActive);
+      let burnCause = null;
       if (!wasPlayable) {
         me.hand = [...me.hand, card, ...pile];
         pile = []; sevenActive = false;
         idx  = advanceTurnBy(players, myOnlineIndex, 1, dir);
       } else {
+        const pileBeforePlay = [...pile];
         res  = resolvePlay([card], pile, sevenActive);
-        if (res.burned) burnedPile.push(...pile, card);
+        if (res.burned) {
+          burnedPile.push(...pile, card);
+          burnCause = computeBurnContext([card], pileBeforePlay);
+        }
         pile = res.newPile; sevenActive = res.newSevenActive;
         const next = onlineNextIdx(players, myOnlineIndex, res, dir);
         idx = next.idx; dir = next.dir;
@@ -1909,12 +2424,13 @@ async function fbPlayFaceDown(index, srcEl) {
       const active = players.filter(p => !p.finished);
       t.update(roomRef(currentRoomCode), {
         players, pile, burnedPile, sevenActive, direction: dir, currentPlayerIndex: idx, finishCounter,
+        burnCause,
         ...(isClassic ? { lastPlayerIdx: wasPlayable ? myOnlineIndex : null } : {}),
         lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
         phase:      active.length <= 1 ? 'ended' : s.phase,
         loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
       });
-      return { card, wasPlayable, burned: !!res.burned };
+      return { card, wasPlayable, burned: !!res.burned, burnCause };
     });
   } catch(e) { toast('Move failed: ' + e.message); return; }
 
@@ -1933,7 +2449,7 @@ async function fbPlayFaceDown(index, srcEl) {
     if (_lastOnlineState) {
       _prevOnlineBurnCount = (_lastOnlineState.burnedPile || []).length;
     }
-    await burnPileAnimation();
+    await burnPileAnimation(result.burnCause);
   }
 
   _fdFlipAnimating = false;
@@ -1994,7 +2510,7 @@ function renderOnlineGame(state) {
   // Detect a new pile burn and show fire animation (non-blocking for online)
   const newBurnCount = (state.burnedPile || []).length;
   if (_prevOnlineBurnCount >= 0 && newBurnCount > _prevOnlineBurnCount) {
-    burnPileAnimation();
+    burnPileAnimation(state.burnCause || null);
   }
   _prevOnlineBurnCount = newBurnCount;
 
@@ -2119,9 +2635,10 @@ document.getElementById('btn-play-selected').onclick = async function () {
     const phase = localPlayerPhase(p);
     if (LG.currentPlayer !== 0 || !['hand','faceUp'].includes(phase)) return;
     if (!isCardPlayable(cardsToPlay[0], LG.pile, LG.sevenActive)) { toast('Cannot play those cards'); return; }
+    const humanPlayPileSnap = [...LG.pile];
     const res = localApplyPlay(0, cardsToPlay);
     if (srcRects.length) flyCardsToPile(cardsToPlay, srcRects);
-    if (res.burned) await burnPileAnimation();
+    if (res.burned) await burnPileAnimation(computeBurnContext(cardsToPlay, humanPlayPileSnap));
     localCheckGameOver();
     if (LG.phase !== 'ended') applyLocalTurnChange(0, res);
     renderLocalGame();
