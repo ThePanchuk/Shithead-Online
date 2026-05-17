@@ -798,6 +798,9 @@ a { color: #7ec88a; }
   flex-shrink: 0;
   padding: 6px 10px 0;
   /* safe area bottom handled by action-bar padding */
+  /* sit above the blur overlay (z-index 3) so the player's own area stays sharp */
+  position: relative;
+  z-index: 4;
 }
 
 /* ── Row 1: Tableau (face-up cascading on face-down) ── */
