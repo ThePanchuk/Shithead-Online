@@ -11,6 +11,10 @@
   --card-sm-w: 40px;
   --card-sm-h: 56px;
 
+  /* Hand fan uses 30% larger cards; calc() auto-updates at every breakpoint */
+  --hand-card-w: calc(var(--card-w) * 1.3);
+  --hand-card-h: calc(var(--card-h) * 1.3);
+
   /* Fan layout */
   --card-peek: 22px;   /* visible strip of each overlapping card */
   --fan-pop:   18px;   /* how far a hovered/selected card rises */
@@ -494,8 +498,8 @@ a { color: #7ec88a; }
 .hand-fan-scroll {
   width: 100%;
   overflow-x: auto;
-  /* extra top padding: --fan-pop for hover + ~8px for rotated card corners */
-  padding: calc(var(--fan-pop) + 8px) 20px 4px;
+  /* extra top padding: --fan-pop for hover + 12px for rotated card corners (larger cards need a bit more) */
+  padding: calc(var(--fan-pop) + 12px) 20px 0;
   /* centre the fan when it's narrower than the screen */
   display: flex;
   justify-content: center;
@@ -514,12 +518,15 @@ a { color: #7ec88a; }
 
 /* Every card except the first overlaps the previous one */
 .hand-fan .card + .card {
-  margin-left: calc(var(--card-peek) - var(--card-w));
+  margin-left: calc(var(--card-peek) - var(--hand-card-w));
 }
 
 /* Fan rotation — angle set per-card via JS as --fan-angle CSS variable.
-   transform-origin: bottom center makes cards spread from a single hand-hold point. */
+   transform-origin: bottom center makes cards spread from a single hand-hold point.
+   Width/height are 30% larger than the default card size. */
 .hand-fan .card {
+  width: var(--hand-card-w);
+  height: var(--hand-card-h);
   transform-origin: bottom center;
   transform: rotate(var(--fan-angle, 0deg));
   transition: transform .15s, box-shadow .15s, z-index 0s;
@@ -787,11 +794,10 @@ a { color: #7ec88a; }
   border-top: 1px solid rgba(255,255,255,.08);
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 0;
   flex-shrink: 0;
-  padding: 6px 10px;
-  /* safe area bottom (home indicator) */
-  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  padding: 6px 10px 0;
+  /* safe area bottom handled by action-bar padding */
 }
 
 /* ── Row 1: Tableau (face-up cascading on face-down) ── */
@@ -801,6 +807,7 @@ a { color: #7ec88a; }
   align-items: flex-end;
   gap: 14px;
   flex-shrink: 0;
+  margin-bottom: 5px;
 }
 .human-zone {
   display: flex;
@@ -854,17 +861,25 @@ a { color: #7ec88a; }
   width: 100%;
 }
 
-/* ── Row 3: Bottom action bar (always visible) ── */
+/* ── Row 3: Bottom action bar (always visible) ──
+   Negative margin-top pulls the bar UP to overlap the hand fan, hiding the
+   bottom 60% of hand cards behind the bar. position+z-index ensures it
+   paints on top of the fan cards. */
 #action-bar {
   display: flex;
   align-items: center;
   justify-content: center;   /* buttons centred; no name tag here any more */
   gap: .6rem;
-  padding: 6px 10px;
-  background: rgba(0,0,0,.35);
-  border-top: 1px solid rgba(255,255,255,.07);
+  padding: 8px 10px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  background: rgba(0,0,0,.90);
+  border-top: 1px solid rgba(255,255,255,.10);
   flex-shrink: 0;
   flex-wrap: wrap;
+  /* pull bar up over the lower 60% of the hand cards */
+  margin-top: calc(var(--hand-card-h) * -0.6);
+  position: relative;
+  z-index: 5;
 }
 .action-btns { display: flex; gap: .8rem; }
 .action-btns .btn {
@@ -941,7 +956,7 @@ a { color: #7ec88a; }
 }
 
 @media (max-width: 480px) {
-  #human-area { gap: 4px; padding: 5px 8px; }
+  #human-area { gap: 0; padding: 5px 8px 0; }
   .human-tableau { gap: 10px; }
   .tableau-sep { margin: 0 2px; }
   .action-btns .btn { padding: .45rem .8rem; font-size: .82rem; }
