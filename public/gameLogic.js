@@ -113,15 +113,12 @@ function resolvePlay(cards, currentPile, sevenActive) {
                newSevenActive: sevenActive, skipCount: 0, reverseDirection: false };
     }
     const mr = mirrored.rank;
-    if (mr === '10') {
-      // Mirror a 10 → burn pile, extra turn
-      return { newPile: [], burned: true, extraTurn: true,
-               newSevenActive: false, skipCount: 0, reverseDirection: false };
-    }
+    // Note: mr === '10' is impossible — a 10 always burns the pile immediately,
+    // so it can never be the effective top when the next card is played.
     if (mr === '8') {
-      // Mirror an 8 → skip 1 player
+      // Mirror an 8 → skip one player per 3 played (two 3s = two skips, etc.)
       return { newPile, burned: false, extraTurn: false,
-               newSevenActive: false, skipCount: 1, reverseDirection: false };
+               newSevenActive: false, skipCount: cards.length, reverseDirection: false };
     }
     if (mr === '9') {
       // Mirror a 9 → reverse direction
