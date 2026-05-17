@@ -848,17 +848,32 @@ a { color: #7ec88a; }
 }
 .hand-zone-wrap > .zone-label-small { text-align: center; }
 
-/* ── Row 3: Name + action buttons ── */
+/* ── Row 3: Bottom action bar (always visible) ── */
 #action-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: .6rem;
-  min-height: 40px;
+  padding: 6px 10px;
+  background: rgba(0,0,0,.35);
+  border-top: 1px solid rgba(255,255,255,.07);
+  flex-shrink: 0;
   flex-wrap: wrap;
 }
-.action-btns { display: flex; gap: .6rem; }
-.action-btns .btn { padding: .5rem 1rem; font-size: .9rem; min-height: 40px; }
+.action-btns { display: flex; gap: .8rem; }
+.action-btns .btn {
+  padding: .5rem 1.4rem;
+  font-size: .9rem;
+  min-height: 40px;
+  transition: filter .2s, opacity .2s;
+}
+
+/* Buttons are always in the DOM; dim them when the action isn't available */
+.btn-action-dim {
+  filter: blur(2.5px);
+  opacity: 0.35;
+  pointer-events: none;
+}
 
 .player-name-tag {
   font-size: .8rem;
@@ -869,7 +884,6 @@ a { color: #7ec88a; }
   padding: .18rem .65rem;
   white-space: nowrap;
 }
-.player-name-tag.is-turn::after { content: ' ◀ Your Turn'; color: #fff; font-weight: 400; }
 
 @media (max-width: 480px) {
   #human-area { gap: 4px; padding: 5px 8px; }

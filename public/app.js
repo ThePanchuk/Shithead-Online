@@ -367,9 +367,7 @@ function renderLocalGame() {
   renderPile(LG.pile);
   renderBurnedPile(LG.burnedPile);
 
-  const nameTag = document.getElementById('human-name');
-  nameTag.textContent = human.name;
-  nameTag.classList.toggle('is-turn', isMyTurn);
+  document.getElementById('human-name').textContent = human.name;
 
   renderHumanStacks(human.faceDown.length, human.faceUp, {
     isMyTurn, phase: humanPhase, pile: LG.pile, sevenActive: LG.sevenActive,
@@ -389,9 +387,9 @@ function renderLocalGame() {
 
   const btnPlay   = document.getElementById('btn-play-selected');
   const btnPickup = document.getElementById('btn-pickup');
-  const canShowActions = isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp');
-  btnPlay.classList.toggle('hidden', !canShowActions || selectedCards.length === 0);
-  btnPickup.classList.toggle('hidden', !canShowActions || LG.pile.length === 0);
+  const canAct = isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp');
+  btnPlay.classList.toggle('btn-action-dim', !canAct || selectedCards.length === 0);
+  btnPickup.classList.toggle('btn-action-dim', !canAct || LG.pile.length === 0);
 
   renderOpponents(LG.players, LG.currentPlayer, false);
 }
@@ -1005,9 +1003,7 @@ function renderOnlineGame(state) {
   renderPile(state.pile);
   renderBurnedPile(state.burnedPile);
 
-  const nameTag = document.getElementById('human-name');
-  nameTag.textContent = me.name;
-  nameTag.classList.toggle('is-turn', isMyTurn);
+  document.getElementById('human-name').textContent = me.name;
 
   renderHumanStacks(state.faceDownCount, me.faceUp, {
     isMyTurn, phase: humanPhase, pile: state.pile, sevenActive: state.sevenActive,
@@ -1026,8 +1022,8 @@ function renderOnlineGame(state) {
   });
 
   const canAct = isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp');
-  document.getElementById('btn-play-selected').classList.toggle('hidden', !canAct || selectedCards.length === 0);
-  document.getElementById('btn-pickup').classList.toggle('hidden', !canAct || state.pile.length === 0);
+  document.getElementById('btn-play-selected').classList.toggle('btn-action-dim', !canAct || selectedCards.length === 0);
+  document.getElementById('btn-pickup').classList.toggle('btn-action-dim', !canAct || state.pile.length === 0);
 
   const oArea = document.getElementById('opponents-area');
   oArea.innerHTML = '';
