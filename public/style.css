@@ -121,6 +121,9 @@ a { color: #7ec88a; }
   min-height: unset;
   overflow: hidden;
   padding: 0;
+  /* .screen uses align-items:center which sizes children to content-width;
+     stretch makes #game-header and #table fill the full viewport width */
+  align-items: stretch;
 }
 
 #screen-swap.active {
