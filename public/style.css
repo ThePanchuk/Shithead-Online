@@ -862,6 +862,9 @@ a { color: #7ec88a; }
 /* ── Row 2: Hand fan (full width) ── */
 .hand-zone-wrap {
   width: 100%;
+  /* Clip rotated card corners that visually extend below the fan container.
+     This is the "fixed horizontal line" that hides the lower part of hand cards. */
+  overflow: hidden;
 }
 
 /* ── Row 3: Bottom action bar (always visible) ──
@@ -882,7 +885,9 @@ a { color: #7ec88a; }
   /* pull bar up over the lower 60% of the hand cards */
   margin-top: calc(var(--hand-card-h) * -0.6);
   position: relative;
-  z-index: 5;
+  /* z-index 100 within #human-area's stacking context — always covers hand cards
+     no matter how many are in hand (their z-index is 1…N in JS) */
+  z-index: 100;
 }
 .action-btns { display: flex; gap: .8rem; }
 .action-btns .btn {

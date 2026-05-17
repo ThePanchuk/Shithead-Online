@@ -249,6 +249,83 @@ function burnPileAnimation() {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Face-down flip animation
+//  Flies a face-down ghost from startRect to the centre of the screen,
+//  does a 2-D scaleX flip to reveal the face-up card, holds for 1 s,
+//  then removes the ghost and resolves with the centre DOMRect.
+// ═══════════════════════════════════════════════════════
+function flipFaceDownAnimation(card, startRect) {
+  return new Promise(resolve => {
+    const cs    = getComputedStyle(document.documentElement);
+    const cardW = parseFloat(cs.getPropertyValue('--card-w'));
+    const cardH = parseFloat(cs.getPropertyValue('--card-h'));
+
+    // Where the card should land (slightly above viewport centre)
+    const tx = window.innerWidth  / 2 - cardW / 2;
+    const ty = window.innerHeight / 2 - cardH / 2 - 60;
+    const centerRect = { left: tx, top: ty, width: cardW, height: cardH };
+
+    if (!startRect) { resolve(centerRect); return; }
+
+    const sx = startRect.left + startRect.width  / 2 - cardW / 2;
+    const sy = startRect.top  + startRect.height / 2 - cardH / 2;
+
+    // ── Create face-down ghost at source position ──────────────────
+    const ghost = makeBackEl();
+    ghost.style.cssText = [
+      'position:fixed', 'left:0', 'top:0',
+      `width:${cardW}px`, `height:${cardH}px`,
+      `transform:translate(${sx}px,${sy}px)`,
+      'transition:none',
+      'pointer-events:none',
+      'z-index:1700',
+    ].join(';');
+    document.body.appendChild(ghost);
+
+    // ── Step 1: fly to centre (0.4 s) ─────────────────────────────
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      ghost.style.transition = 'transform 0.4s cubic-bezier(0.2,0,0.3,1)';
+      ghost.style.transform  = `translate(${tx}px,${ty}px)`;
+
+      setTimeout(() => {
+        // ── Step 2: squeeze to invisible (0.14 s) ─────────────────
+        ghost.style.transition = 'transform 0.14s ease-in';
+        ghost.style.transform  = `translate(${tx}px,${ty}px) scaleX(0.01)`;
+
+        setTimeout(() => {
+          // ── Step 3: swap card face while invisible ─────────────
+          const faceUpEl = makeCardEl(card);
+          ghost.className = faceUpEl.className;   // removes 'card-back', adds red/black
+          ghost.innerHTML = faceUpEl.innerHTML;   // rank + suit spans
+
+          // Re-apply inline styles preserved from cssText (width/height/etc.)
+          ghost.style.width    = cardW + 'px';
+          ghost.style.height   = cardH + 'px';
+          ghost.style.position = 'fixed';
+          ghost.style.left     = '0';
+          ghost.style.top      = '0';
+          ghost.style.pointerEvents = 'none';
+          ghost.style.zIndex   = '1700';
+
+          // ── Step 4: expand back to full width (0.14 s) ────────
+          ghost.style.transition = 'none';
+          ghost.style.transform  = `translate(${tx}px,${ty}px) scaleX(0.01)`;
+          void ghost.offsetHeight; // force reflow before transitioning
+          ghost.style.transition = 'transform 0.14s ease-out';
+          ghost.style.transform  = `translate(${tx}px,${ty}px) scaleX(1)`;
+
+          // ── Step 5: hold for 1 s then remove ──────────────────
+          setTimeout(() => {
+            ghost.remove();
+            resolve(centerRect);
+          }, 1000 + 140); // 140 ms expand + 1000 ms hold
+        }, 140); // wait for squeeze
+      }, 400); // wait for fly
+    }));
+  });
+}
+
+// ═══════════════════════════════════════════════════════
 //  Card staging  —  selected hand cards float to centre
 // ═══════════════════════════════════════════════════════
 
@@ -660,7 +737,7 @@ function renderLocalGame() {
 
   renderHumanStacks(human.faceDown.length, human.faceUp, {
     isMyTurn, phase: humanPhase, pile: LG.pile, sevenActive: LG.sevenActive,
-    onFaceDownClick: i => humanPlayFaceDown(i),
+    onFaceDownClick: (i, el) => humanPlayFaceDown(i, el),
     onFaceUpClick:   card => toggleSelectCard(card, 'faceUp')
   });
 
@@ -744,6 +821,10 @@ async function humanPlayFaceDown(faceDownIdx, srcEl) {
   const srcRect = srcEl ? srcEl.getBoundingClientRect() : null;
   p.faceDown.splice(faceDownIdx, 1);
 
+  // Show flip animation: fly face-down card to centre, reveal it, hold 1 s.
+  // Returns the centre DOMRect so we can fly from there to the pile if playable.
+  const centerRect = await flipFaceDownAnimation(card, srcRect);
+
   let didBurn = false;
   if (!isCardPlayable(card, LG.pile, LG.sevenActive)) {
     p.hand.push(card, ...LG.pile);
@@ -752,7 +833,8 @@ async function humanPlayFaceDown(faceDownIdx, srcEl) {
     toast(`Flipped ${card.rank}${card.suit} — can't play! Picked up pile.`);
     localAdvanceTurn(0);
   } else {
-    if (srcRect) flyCardsToPile([card], [srcRect]);
+    // Fly the revealed card from the flip-centre position into the pile
+    flyCardsToPile([card], [centerRect]);
     const res = resolvePlay([card], LG.pile, LG.sevenActive);
     if (res.burned) {
       LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
