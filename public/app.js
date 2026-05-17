@@ -56,6 +56,42 @@ function showScreen(id) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Card-to-pile fly animation
+// ═══════════════════════════════════════════════════════
+// cards : array of card objects — a face-up ghost is created per card
+// rects : array of DOMRects for start positions; last rect reused if shorter
+function flyCardsToPile(cards, rects) {
+  if (!cards || !cards.length || !rects || !rects.length) return;
+  const pileEl = document.getElementById('pile-visual');
+  if (!pileEl) return;
+  const to = pileEl.getBoundingClientRect();
+  if (!to.width) return;
+  const tx = to.left + to.width  / 2;
+  const ty = to.top  + to.height / 2;
+  cards.forEach((card, i) => {
+    const src = rects[Math.min(i, rects.length - 1)];
+    const el  = makeCardEl(card);
+    el.style.position      = 'fixed';
+    el.style.left          = '0';
+    el.style.top           = '0';
+    el.style.width         = src.width  + 'px';
+    el.style.height        = src.height + 'px';
+    el.style.transform     = `translate(${src.left}px,${src.top}px)`;
+    el.style.transition    = 'none';
+    el.style.pointerEvents = 'none';
+    el.style.zIndex        = String(1500 + i);
+    document.body.appendChild(el);
+    // Double-rAF: first paints initial position, second starts the move
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.transition = 'transform 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.12s 0.3s';
+      el.style.transform  = `translate(${tx - src.width / 2}px,${ty - src.height / 2}px) scale(0.55)`;
+      el.style.opacity    = '0';
+      setTimeout(() => el.remove(), 520);
+    }));
+  });
+}
+
+// ═══════════════════════════════════════════════════════
 //  Card DOM helpers
 // ═══════════════════════════════════════════════════════
 function makeCardEl(card, opts = {}) {
@@ -94,7 +130,7 @@ function renderHumanStacks(faceDownLen, faceUp, opt) {
       const playable = opt.isMyTurn && opt.phase === 'faceDown';
       const fdEl = makeBackEl({ playable });
       fdEl.classList.add('stack-facedown');
-      if (playable && opt.onFaceDownClick) fdEl.onclick = () => opt.onFaceDownClick(i);
+      if (playable && opt.onFaceDownClick) fdEl.onclick = () => opt.onFaceDownClick(i, fdEl);
       stack.appendChild(fdEl);
     }
 
@@ -320,16 +356,23 @@ function botTakeTurn(botIdx) {
     return;
   }
 
+  // Helper: get the opponent-slot DOMRect for this bot (slots rendered in player-index order, human skipped)
+  const getBotSlotRect = () => {
+    const slots = document.querySelectorAll('#opponents-area .opponent-slot');
+    return slots[botIdx - 1]?.getBoundingClientRect() ?? null;
+  };
+
   if (decision.action === 'playFaceDown') {
-    const card = p.faceDown[0];
+    const card    = p.faceDown[0];
+    const srcRect = getBotSlotRect();
     p.faceDown.splice(0, 1);
     if (!isCardPlayable(card, LG.pile, LG.sevenActive)) {
       p.hand.push(card, ...LG.pile);
       LG.pile = [];
       LG.sevenActive = false;
-      toast(`${p.name} flipped ${card.rank}${card.suit} — can't play, picks up!`);
       localAdvanceTurn(botIdx);
     } else {
+      if (srcRect) flyCardsToPile([card], [srcRect]);
       const res = resolvePlay([card], LG.pile, LG.sevenActive);
       if (res.burned) LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
       LG.pile = res.newPile;
@@ -342,8 +385,9 @@ function botTakeTurn(botIdx) {
   }
 
   if (decision.action === 'play') {
+    const srcRect = getBotSlotRect();
     const res = localApplyPlay(botIdx, decision.cards);
-    toast(`${p.name} plays ${decision.cards.map(c => c.rank + c.suit).join(' ')}`);
+    if (srcRect) flyCardsToPile(decision.cards, [srcRect]);
     applyLocalTurnChange(botIdx, res);
     afterBotAction();
   }
@@ -448,12 +492,13 @@ function toggleSelectCard(card, source) {
   renderLocalGame();
 }
 
-function humanPlayFaceDown(faceDownIdx) {
+function humanPlayFaceDown(faceDownIdx, srcEl) {
   if (LG.currentPlayer !== 0) return;
   const p = LG.players[0];
   if (localPlayerPhase(p) !== 'faceDown') return;
 
-  const card = p.faceDown[faceDownIdx];
+  const card    = p.faceDown[faceDownIdx];
+  const srcRect = srcEl ? srcEl.getBoundingClientRect() : null;
   p.faceDown.splice(faceDownIdx, 1);
 
   if (!isCardPlayable(card, LG.pile, LG.sevenActive)) {
@@ -463,6 +508,7 @@ function humanPlayFaceDown(faceDownIdx) {
     toast(`Flipped ${card.rank}${card.suit} — can't play! Picked up pile.`);
     localAdvanceTurn(0);
   } else {
+    if (srcRect) flyCardsToPile([card], [srcRect]);
     const res = resolvePlay([card], LG.pile, LG.sevenActive);
     if (res.burned) LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
     LG.pile = res.newPile;
@@ -919,7 +965,8 @@ async function fbPickup() {
   selectedCards = [];
 }
 
-async function fbPlayFaceDown(index) {
+async function fbPlayFaceDown(index, srcEl) {
+  const srcRect = srcEl ? srcEl.getBoundingClientRect() : null;
   try {
     await window.db.runTransaction(async t => {
       const snap = await t.get(roomRef(currentRoomCode));
@@ -930,6 +977,10 @@ async function fbPlayFaceDown(index) {
       }));
       const me   = players[myOnlineIndex];
       const card = me.faceDown.splice(index, 1)[0];
+      // Animate the card flying to the pile (we know the card now)
+      if (srcRect && isCardPlayable(card, s.pile || [], s.sevenActive)) {
+        flyCardsToPile([card], [srcRect]);
+      }
       let pile = s.pile || [], sevenActive = s.sevenActive, dir = s.direction || 1, idx;
       let res = { reverseDirection: false, extraTurn: false, skipCount: 0, newSevenActive: false };
       const burnedPile = [...(s.burnedPile || [])];
@@ -1031,7 +1082,7 @@ function renderOnlineGame(state) {
 
   renderHumanStacks(state.faceDownCount, me.faceUp, {
     isMyTurn, phase: humanPhase, pile: state.pile, sevenActive: state.sevenActive,
-    onFaceDownClick: i => fbPlayFaceDown(i),
+    onFaceDownClick: (i, el) => fbPlayFaceDown(i, el),
     onFaceUpClick:   card => onlineToggleSelect(card)
   });
 
@@ -1085,8 +1136,13 @@ document.getElementById('sort-by-suit').addEventListener('change', function () {
 // ─── Play / Pick-up buttons ────────────────────────────
 
 document.getElementById('btn-play-selected').onclick = function () {
+  // Capture source rects before any DOM changes
+  const playEls  = [...document.querySelectorAll('#human-hand .card.selected, #human-stacks .card.selected')];
+  const srcRects = playEls.map(el => el.getBoundingClientRect());
+
   if (mode === 'online') {
     if (!selectedCards.length) return;
+    if (srcRects.length) flyCardsToPile(selectedCards, srcRects);
     fbPlayCards(selectedCards);
   } else {
     if (!LG || !selectedCards.length) return;
@@ -1095,6 +1151,7 @@ document.getElementById('btn-play-selected').onclick = function () {
     if (LG.currentPlayer !== 0 || !['hand','faceUp'].includes(phase)) return;
     if (!isCardPlayable(selectedCards[0], LG.pile, LG.sevenActive)) { toast('Cannot play those cards'); return; }
     const res = localApplyPlay(0, selectedCards);
+    if (srcRects.length) flyCardsToPile(selectedCards, srcRects);
     selectedCards = [];
     localCheckGameOver();
     if (LG.phase !== 'ended') {
