@@ -104,10 +104,38 @@ function resolvePlay(cards, currentPile, sevenActive) {
              newSevenActive: false, skipCount: 0, reverseDirection: false };
   }
 
-  // 3 → mirrors the card below; sevenActive state is inherited unchanged
+  // 3 → mirrors the card below; apply that card's effect
   if (rank === '3') {
+    const mirrored = getEffectiveTop(currentPile); // last non-3 before this play
+    // No card below, or wild 2 below → no special effect
+    if (!mirrored || mirrored.rank === '2') {
+      return { newPile, burned: false, extraTurn: false,
+               newSevenActive: sevenActive, skipCount: 0, reverseDirection: false };
+    }
+    const mr = mirrored.rank;
+    if (mr === '10') {
+      // Mirror a 10 → burn pile, extra turn
+      return { newPile: [], burned: true, extraTurn: true,
+               newSevenActive: false, skipCount: 0, reverseDirection: false };
+    }
+    if (mr === '8') {
+      // Mirror an 8 → skip 1 player
+      return { newPile, burned: false, extraTurn: false,
+               newSevenActive: false, skipCount: 1, reverseDirection: false };
+    }
+    if (mr === '9') {
+      // Mirror a 9 → reverse direction
+      return { newPile, burned: false, extraTurn: false,
+               newSevenActive: false, skipCount: 0, reverseDirection: true };
+    }
+    if (mr === '7') {
+      // Mirror a 7 → next player must still play < 7
+      return { newPile, burned: false, extraTurn: false,
+               newSevenActive: true, skipCount: 0, reverseDirection: false };
+    }
+    // Any other rank → no special effect; 3 acts as that value only for playability
     return { newPile, burned: false, extraTurn: false,
-             newSevenActive: sevenActive, skipCount: 0, reverseDirection: false };
+             newSevenActive: false, skipCount: 0, reverseDirection: false };
   }
 
   // 8 → skip the next N players (N = number of 8s played at once)
