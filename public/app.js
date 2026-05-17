@@ -682,6 +682,7 @@ async function fbDrawCard() {
       if (s.gameMode !== 'classic') return;
       const deck = [...(s.deck || [])];
       if (!deck.length) return;
+      if ((s.players[myOnlineIndex]?.hand?.length ?? 0) >= 3) return;
       const players = s.players.map(p => ({ ...p, hand: [...p.hand] }));
       const card = deck.pop();
       players[myOnlineIndex].hand.push(card);
