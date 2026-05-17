@@ -1542,7 +1542,13 @@ function subscribeRoom(code) {
       return;
     }
     const s = snap.data();
+    // _swapHand / _swapFaceUp are local mutations not in Firestore;
+    // toRenderState creates a fresh object that would wipe them, so preserve them.
+    const savedSwapHand   = OG?._swapHand;
+    const savedSwapFaceUp = OG?._swapFaceUp;
     OG = toRenderState(s);
+    if (savedSwapHand)   OG._swapHand   = savedSwapHand;
+    if (savedSwapFaceUp) OG._swapFaceUp = savedSwapFaceUp;
     onRoomUpdate(s);
   }, err => toast('Connection error: ' + err.message, 4000));
 }
