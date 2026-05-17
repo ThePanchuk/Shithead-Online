@@ -101,94 +101,83 @@ function flyCardsToPile(cards, rects) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  Pile-burn fire animation  (Doom cellular-automaton + CSS flame tongues)
+//  Pile-burn animations  — 4 variants, one chosen at random
 // ═══════════════════════════════════════════════════════
 function burnPileAnimation() {
+  const variants = [
+    _burnVariant_inferno,    // orange Doom fire
+    _burnVariant_arcane,     // blue-purple arcane flame
+    _burnVariant_explosion,  // shockwave + particle burst
+    _burnVariant_vortex,     // dark spiral implosion
+  ];
+  return variants[Math.floor(Math.random() * variants.length)]();
+}
+
+// ─── Variant 1: Doom inferno (orange / red) ───────────────
+function _burnVariant_inferno() {
   return new Promise(resolve => {
     const pileEl = document.getElementById('pile-visual');
     if (!pileEl) { resolve(); return; }
     const rect = pileEl.getBoundingClientRect();
     if (!rect.width) { resolve(); return; }
 
-    const DURATION = 2200;                        // ms total
-    const FW = Math.round(rect.width  * 2.4);    // wider than pile — fire spreads
-    const FH = Math.round(rect.height * 3.5);    // tall — fire rises dramatically
+    const DURATION = 2200;
+    const FW = Math.round(rect.width  * 2.4);
+    const FH = Math.round(rect.height * 3.5);
 
-    // ── container (fixed, centred on pile, extends upward) ──────────────────
     const wrap = document.createElement('div');
     wrap.style.cssText = [
       'position:fixed',
       `left:${Math.round(rect.left + rect.width / 2 - FW / 2)}px`,
       `top:${Math.round(rect.bottom - FH)}px`,
-      `width:${FW}px`,
-      `height:${FH}px`,
-      'pointer-events:none',
-      'z-index:1600',
+      `width:${FW}px`, `height:${FH}px`,
+      'pointer-events:none', 'z-index:1600',
     ].join(';');
     document.body.appendChild(wrap);
 
-    // ── initial flash — orange burst the instant fire erupts ────────────────
     const flash = document.createElement('div');
     flash.style.cssText = [
       'position:absolute',
       `left:${Math.round(FW / 2 - rect.width * 0.7)}px`,
       `top:${FH - rect.height}px`,
-      `width:${Math.round(rect.width * 1.4)}px`,
-      `height:${rect.height}px`,
+      `width:${Math.round(rect.width * 1.4)}px`, `height:${rect.height}px`,
       'background:radial-gradient(ellipse,rgba(255,230,80,.95) 0%,rgba(255,80,0,.55) 50%,transparent 80%)',
-      'border-radius:8px',
-      'transition:opacity .35s ease-out',
+      'border-radius:8px', 'transition:opacity .35s ease-out',
     ].join(';');
     wrap.appendChild(flash);
     requestAnimationFrame(() => requestAnimationFrame(() => { flash.style.opacity = '0'; }));
 
-    // ── canvas — Doom-style cellular-automaton fire ──────────────────────────
-    const SCALE = 3;                    // downscale → pixelated look + fast
-    const CW = Math.ceil(FW / SCALE);
-    const CH = Math.ceil(FH / SCALE);
+    const SCALE = 3;
+    const CW = Math.ceil(FW / SCALE), CH = Math.ceil(FH / SCALE);
     const canvas = document.createElement('canvas');
-    canvas.width  = CW;
-    canvas.height = CH;
-    canvas.style.cssText = [
-      'position:absolute', 'top:0', 'left:0',
-      'width:100%', 'height:100%',
-      'image-rendering:pixelated',
-      'image-rendering:crisp-edges',
-    ].join(';');
+    canvas.width = CW; canvas.height = CH;
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges';
     wrap.appendChild(canvas);
     const ctx = canvas.getContext('2d');
 
-    // Pre-compute colour palette: index 0-255 → RGBA
-    // 0 = transparent; low = dark red; mid = orange; high = yellow; max = white
+    // Palette: dark red → orange → yellow → white
     const pal = new Uint8ClampedArray(256 * 4);
     for (let i = 1; i < 256; i++) {
       const t = i / 255;
-      pal[i*4]   = Math.min(255, (t * 3 * 255)              | 0); // R — full early
-      pal[i*4+1] = t < 0.35 ? 0 : Math.min(255,
-                     (((t - 0.35) / 0.65) * 255)            | 0); // G — orange/yellow
-      pal[i*4+2] = t < 0.78 ? 0 : Math.min(255,
-                     (((t - 0.78) / 0.22) * 255)            | 0); // B — white tips
-      pal[i*4+3] = Math.min(255, (Math.min(1, t * 2.2)*255) | 0); // A — builds quickly
+      pal[i*4]   = Math.min(255, (t * 3 * 255)              | 0);
+      pal[i*4+1] = t < 0.35 ? 0 : Math.min(255, (((t-0.35)/0.65)*255) | 0);
+      pal[i*4+2] = t < 0.78 ? 0 : Math.min(255, (((t-0.78)/0.22)*255) | 0);
+      pal[i*4+3] = Math.min(255, (Math.min(1, t*2.2)*255)   | 0);
     }
-
-    const buf     = new Uint8Array(CW * CH);
+    const buf = new Uint8Array(CW * CH);
     const imgData = ctx.createImageData(CW, CH);
-    const pd      = imgData.data;
+    const pd = imgData.data;
 
-    // ── CSS flame tongues layered over the canvas ────────────────────────────
     for (let i = 0; i < 11; i++) {
-      const fl  = document.createElement('div');
-      const w   = (14 + Math.random() * 26) | 0;
-      const h   = (w * (1.5 + Math.random()))  | 0;
-      const x   = (FW * 0.05 + Math.random() * FW * 0.9 - w / 2) | 0;
+      const fl = document.createElement('div');
+      const w  = (14 + Math.random() * 26) | 0;
+      const h  = (w  * (1.5 + Math.random())) | 0;
+      const x  = (FW * 0.05 + Math.random() * FW * 0.9 - w / 2) | 0;
       const dur = (0.42 + Math.random() * 0.44).toFixed(2);
       const del = (Math.random() * 0.55).toFixed(2);
       fl.style.cssText = [
-        'position:absolute',
-        `left:${x}px`,
-        'bottom:0',
-        `width:${w}px`,
-        `height:${h}px`,
+        'position:absolute', `left:${x}px`, 'bottom:0',
+        `width:${w}px`, `height:${h}px`,
         'border-radius:50% 50% 30% 30% / 55% 55% 45% 45%',
         'transform-origin:50% 100%',
         'background:radial-gradient(ellipse at 50% 80%,#ffe566 0%,#ff5500 45%,#cc1000 78%,transparent 100%)',
@@ -198,49 +187,336 @@ function burnPileAnimation() {
       wrap.appendChild(fl);
     }
 
-    // ── animation loop ───────────────────────────────────────────────────────
     const t0 = performance.now();
-
     function frame(now) {
       const elapsed  = now - t0;
       const progress = elapsed / DURATION;
-
-      // Feed heat to bottom row; taper off in final 35%
-      const maxHeat = progress < 0.65
+      const maxHeat  = progress < 0.65
         ? 220 + ((Math.random() * 35) | 0)
         : Math.max(0, ((1 - (progress - 0.65) / 0.35) * 245) | 0);
-
-      for (let x = 0; x < CW; x++) {
-        buf[(CH - 1) * CW + x] = maxHeat > 8
-          ? Math.max(0, maxHeat - ((Math.random() * 45) | 0))
-          : 0;
-      }
-
-      // Doom fire: each cell reads from one row below + random leftward drift + cooling
+      for (let x = 0; x < CW; x++)
+        buf[(CH-1)*CW+x] = maxHeat > 8 ? Math.max(0, maxHeat - ((Math.random()*45)|0)) : 0;
       for (let y = 0; y < CH - 1; y++) {
         for (let x = 0; x < CW; x++) {
-          const drift = (Math.random() * 3) | 0;          // 0, 1, or 2
-          const srcX  = Math.min(CW - 1, Math.max(0, x - drift + 1));
-          buf[y * CW + x] = Math.max(0, buf[(y + 1) * CW + srcX] - (drift & 1));
+          const drift = (Math.random() * 3) | 0;
+          const srcX  = Math.min(CW-1, Math.max(0, x - drift + 1));
+          buf[y*CW+x] = Math.max(0, buf[(y+1)*CW+srcX] - (drift & 1));
         }
       }
-
-      // Render buffer → ImageData
       for (let i = 0; i < CW * CH; i++) {
         const pi = buf[i] * 4;
-        pd[i*4]   = pal[pi];
-        pd[i*4+1] = pal[pi + 1];
-        pd[i*4+2] = pal[pi + 2];
-        pd[i*4+3] = pal[pi + 3];
+        pd[i*4] = pal[pi]; pd[i*4+1] = pal[pi+1]; pd[i*4+2] = pal[pi+2]; pd[i*4+3] = pal[pi+3];
       }
       ctx.putImageData(imgData, 0, 0);
-
       if (elapsed < DURATION) {
         requestAnimationFrame(frame);
       } else {
         wrap.style.transition = 'opacity 0.3s ease-out';
         wrap.style.opacity    = '0';
         setTimeout(() => { wrap.remove(); resolve(); }, 350);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// ─── Variant 2: Arcane flame (blue / purple / cyan) ──────
+function _burnVariant_arcane() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+
+    const DURATION = 2000;
+    const FW = Math.round(rect.width  * 2.6);
+    const FH = Math.round(rect.height * 4.0);
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = [
+      'position:fixed',
+      `left:${Math.round(rect.left + rect.width / 2 - FW / 2)}px`,
+      `top:${Math.round(rect.bottom - FH)}px`,
+      `width:${FW}px`, `height:${FH}px`,
+      'pointer-events:none', 'z-index:1600',
+    ].join(';');
+    document.body.appendChild(wrap);
+
+    // Purple-white flash
+    const flash = document.createElement('div');
+    flash.style.cssText = [
+      'position:absolute',
+      `left:${Math.round(FW / 2 - rect.width * 0.7)}px`,
+      `top:${FH - rect.height}px`,
+      `width:${Math.round(rect.width * 1.4)}px`, `height:${rect.height}px`,
+      'background:radial-gradient(ellipse,rgba(210,190,255,.97) 0%,rgba(100,0,255,.60) 50%,transparent 80%)',
+      'border-radius:8px', 'transition:opacity .35s ease-out',
+    ].join(';');
+    wrap.appendChild(flash);
+    requestAnimationFrame(() => requestAnimationFrame(() => { flash.style.opacity = '0'; }));
+
+    const SCALE = 3;
+    const CW = Math.ceil(FW / SCALE), CH = Math.ceil(FH / SCALE);
+    const canvas = document.createElement('canvas');
+    canvas.width = CW; canvas.height = CH;
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges';
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    // Palette: dark indigo → blue-violet → royal blue → cyan → white
+    const pal = new Uint8ClampedArray(256 * 4);
+    for (let i = 1; i < 256; i++) {
+      const t = i / 255;
+      pal[i*4]   = t < 0.5 ? (t / 0.5 * 80) | 0 : (80 + (t-0.5) / 0.5 * 175) | 0;
+      pal[i*4+1] = t < 0.5 ? 0 : Math.min(255, (((t-0.5) / 0.5) * 255) | 0);
+      pal[i*4+2] = Math.min(255, (t * 2 * 255) | 0);
+      pal[i*4+3] = Math.min(255, (Math.min(1, t * 2.2) * 255) | 0);
+    }
+    const buf = new Uint8Array(CW * CH);
+    const imgData = ctx.createImageData(CW, CH);
+    const pd = imgData.data;
+
+    // CSS flame tongues — blue / cyan
+    for (let i = 0; i < 11; i++) {
+      const fl = document.createElement('div');
+      const w  = (12 + Math.random() * 28) | 0;
+      const h  = (w  * (1.6 + Math.random())) | 0;
+      const x  = (FW * 0.05 + Math.random() * FW * 0.9 - w / 2) | 0;
+      const dur = (0.38 + Math.random() * 0.48).toFixed(2);
+      const del = (Math.random() * 0.60).toFixed(2);
+      fl.style.cssText = [
+        'position:absolute', `left:${x}px`, 'bottom:0',
+        `width:${w}px`, `height:${h}px`,
+        'border-radius:50% 50% 30% 30% / 55% 55% 45% 45%',
+        'transform-origin:50% 100%',
+        'background:radial-gradient(ellipse at 50% 80%,#aaf0ff 0%,#3355ff 45%,#7700cc 78%,transparent 100%)',
+        `animation:pile-flame-rise ${dur}s ease-in-out ${del}s infinite`,
+        'mix-blend-mode:screen',
+      ].join(';');
+      wrap.appendChild(fl);
+    }
+
+    const t0 = performance.now();
+    function frame(now) {
+      const elapsed  = now - t0;
+      const progress = elapsed / DURATION;
+      const maxHeat  = progress < 0.60
+        ? 230 + ((Math.random() * 25) | 0)
+        : Math.max(0, ((1 - (progress - 0.60) / 0.40) * 255) | 0);
+      for (let x = 0; x < CW; x++)
+        buf[(CH-1)*CW+x] = maxHeat > 8 ? Math.max(0, maxHeat - ((Math.random()*40)|0)) : 0;
+      // Wilder drift (0-3) for the chaotic arcane feel
+      for (let y = 0; y < CH - 1; y++) {
+        for (let x = 0; x < CW; x++) {
+          const drift = (Math.random() * 4) | 0;
+          const srcX  = Math.min(CW-1, Math.max(0, x - drift + 1));
+          buf[y*CW+x] = Math.max(0, buf[(y+1)*CW+srcX] - (drift === 0 ? 0 : 1));
+        }
+      }
+      for (let i = 0; i < CW * CH; i++) {
+        const pi = buf[i] * 4;
+        pd[i*4] = pal[pi]; pd[i*4+1] = pal[pi+1]; pd[i*4+2] = pal[pi+2]; pd[i*4+3] = pal[pi+3];
+      }
+      ctx.putImageData(imgData, 0, 0);
+      if (elapsed < DURATION) {
+        requestAnimationFrame(frame);
+      } else {
+        wrap.style.transition = 'opacity 0.3s ease-out';
+        wrap.style.opacity    = '0';
+        setTimeout(() => { wrap.remove(); resolve(); }, 350);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// ─── Variant 3: Shockwave explosion (particle burst) ─────
+function _burnVariant_explosion() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+
+    const DURATION = 1500;
+    const cx = rect.left + rect.width  / 2;
+    const cy = rect.top  + rect.height / 2;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    // Central radial flash
+    const FR = rect.width * 1.9;
+    const flash = document.createElement('div');
+    flash.style.cssText = [
+      'position:absolute',
+      `left:${cx - FR}px`, `top:${cy - FR}px`,
+      `width:${FR * 2}px`, `height:${FR * 2}px`,
+      'border-radius:50%',
+      'background:radial-gradient(circle,rgba(255,255,210,.98) 0%,rgba(255,200,0,.85) 30%,rgba(255,80,0,.5) 60%,transparent 80%)',
+      'transform:scale(0)', 'transition:transform 0.12s ease-out',
+    ].join(';');
+    wrap.appendChild(flash);
+
+    // Expanding shockwave ring
+    const RR = rect.width * 0.7;
+    const ring = document.createElement('div');
+    ring.style.cssText = [
+      'position:absolute',
+      `left:${cx - RR}px`, `top:${cy - RR}px`,
+      `width:${RR * 2}px`, `height:${RR * 2}px`,
+      'border-radius:50%',
+      'border:3px solid rgba(255,210,80,.9)',
+      'box-shadow:0 0 20px rgba(255,160,0,.7),inset 0 0 20px rgba(255,160,0,.4)',
+      'transform:scale(0.15)',
+      'transition:transform 0.55s ease-out,opacity 0.4s ease-out 0.1s',
+    ].join(';');
+    wrap.appendChild(ring);
+
+    // Debris particles — orange, yellow-orange, red-orange hues
+    const NPARTS = 30;
+    const parts  = [];
+    for (let i = 0; i < NPARTS; i++) {
+      const p   = document.createElement('div');
+      const ang = (i / NPARTS) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const d   = 70 + Math.random() * 170;
+      const sz  = (3 + Math.random() * 9) | 0;
+      const dur = (0.50 + Math.random() * 0.55).toFixed(2);
+      const del = (Math.random() * 0.10).toFixed(2);
+      const hue = (10 + Math.random() * 45) | 0;
+      p._tx = (Math.cos(ang) * d).toFixed(1);
+      p._ty = (Math.sin(ang) * d).toFixed(1);
+      p.style.cssText = [
+        'position:absolute',
+        `left:${cx - sz / 2}px`, `top:${cy - sz / 2}px`,
+        `width:${sz}px`, `height:${sz}px`,
+        `border-radius:${Math.random() > 0.5 ? '50%' : '3px'}`,
+        `background:hsl(${hue},100%,${(55 + Math.random() * 20) | 0}%)`,
+        `box-shadow:0 0 ${sz * 2}px hsla(${hue},100%,65%,.7)`,
+        'transform:translate(0,0) scale(1)',
+        `transition:transform ${dur}s ease-out ${del}s,opacity ${dur}s ease-out ${del}s`,
+      ].join(';');
+      wrap.appendChild(p);
+      parts.push(p);
+    }
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      flash.style.transform = 'scale(1)';
+      ring.style.transform  = `scale(${3.5 + rect.width / 70})`;
+      ring.style.opacity    = '0';
+      parts.forEach(p => {
+        p.style.transform = `translate(${p._tx}px,${p._ty}px) scale(0)`;
+        p.style.opacity   = '0';
+      });
+      setTimeout(() => {
+        flash.style.transition += ',opacity 0.45s ease-out';
+        flash.style.opacity     = '0';
+      }, 120);
+      setTimeout(() => {
+        wrap.style.transition = 'opacity 0.25s';
+        wrap.style.opacity    = '0';
+        setTimeout(() => { wrap.remove(); resolve(); }, 250);
+      }, DURATION - 250);
+    }));
+  });
+}
+
+// ─── Variant 4: Dark vortex (spiral implosion) ───────────
+function _burnVariant_vortex() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+
+    const DURATION = 2100;
+    const cx = rect.left + rect.width  / 2;
+    const cy = rect.top  + rect.height / 2;
+
+    // Full-screen canvas so the dark veil can cover the whole table
+    const SCALE = 2;
+    const CW = Math.ceil(window.innerWidth  / SCALE);
+    const CH = Math.ceil(window.innerHeight / SCALE);
+    const canvas = document.createElement('canvas');
+    canvas.width = CW; canvas.height = CH;
+    canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1600';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    const pcx = cx / SCALE;
+    const pcy = cy / SCALE;
+
+    // Particles start in a ring around the pile centre and spiral inward
+    const NPARTS = 80;
+    const parts  = Array.from({ length: NPARTS }, (_, i) => {
+      const angle = (i / NPARTS) * Math.PI * 2 + Math.random() * 0.35;
+      const dist  = (70 + Math.random() * 190) / SCALE;
+      return {
+        x: pcx + Math.cos(angle) * dist,
+        y: pcy + Math.sin(angle) * dist,
+        angle, dist,
+        speed: 0.8 + Math.random() * 1.8,
+        size:  1   + Math.random() * 2.5,
+        hue:   (220 + Math.random() * 80) | 0,   // blue → purple
+        alpha: 0.5 + Math.random() * 0.5,
+      };
+    });
+
+    const t0 = performance.now();
+
+    function frame(now) {
+      const elapsed  = now - t0;
+      const progress = Math.min(1, elapsed / DURATION);
+
+      ctx.clearRect(0, 0, CW, CH);
+
+      // Dark veil grows over time
+      ctx.fillStyle = `rgba(0,0,15,${Math.min(0.55, progress * 0.85)})`;
+      ctx.fillRect(0, 0, CW, CH);
+
+      // Contracting glowing ring
+      const ringR = Math.max(1.5, 120 * (1 - progress * 1.1) / SCALE);
+      if (ringR > 1.5) {
+        const grad = ctx.createRadialGradient(pcx, pcy, ringR * 0.6, pcx, pcy, ringR * 1.4);
+        grad.addColorStop(0,   'rgba(80,120,255,0)');
+        grad.addColorStop(0.5, `rgba(100,160,255,${0.7 * (1 - progress)})`);
+        grad.addColorStop(1,   'rgba(80,120,255,0)');
+        ctx.beginPath();
+        ctx.arc(pcx, pcy, ringR, 0, Math.PI * 2);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth   = ringR * 0.45;
+        ctx.stroke();
+      }
+
+      // Spiral particles accelerate inward as progress grows
+      const accel = 1 + progress * 6;
+      parts.forEach(p => {
+        p.angle += 0.07 * p.speed;
+        p.dist   = Math.max(0, p.dist - p.speed * accel * 0.32);
+        p.x = pcx + Math.cos(p.angle) * p.dist;
+        p.y = pcy + Math.sin(p.angle) * p.dist;
+        if (p.dist > 0.5) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${p.hue},100%,72%,${p.alpha * (1 - progress * 0.3)})`;
+          ctx.fill();
+        }
+      });
+
+      // Blue-white collapse flash when the vortex implodes
+      if (progress > 0.80) {
+        const ft = (progress - 0.80) / 0.20;
+        ctx.fillStyle = `rgba(160,200,255,${Math.sin(ft * Math.PI) * 0.88})`;
+        ctx.fillRect(0, 0, CW, CH);
+      }
+
+      if (elapsed < DURATION) {
+        requestAnimationFrame(frame);
+      } else {
+        canvas.style.transition = 'opacity 0.3s';
+        canvas.style.opacity    = '0';
+        setTimeout(() => { canvas.remove(); resolve(); }, 300);
       }
     }
 
