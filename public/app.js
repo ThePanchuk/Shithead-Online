@@ -40,6 +40,9 @@ let _prevMistakeSeq   = -1;   // last seen mistake seq; -1 = not yet in play pha
 let _mistakeAnimating = false; // blocks renderOnlineGame during animation
 let _playPhaseShown   = false; // true once we've initialised _prevMistakeSeq for this game
 
+// Face-down flip animation (online) — blocks renderOnlineGame while the reveal plays
+let _fdFlipAnimating = false;
+
 // Pending online game mode selected by the player before entering the lobby
 let _pendingOnlineMode = 'pathetic'; // 'pathetic' | 'classic'
 
@@ -1481,6 +1484,7 @@ function stopRoom() {
   _prevMistakeSeq   = -1;
   _mistakeAnimating = false;
   _playPhaseShown   = false;
+  _fdFlipAnimating  = false;
 }
 
 // ─── Create / Join ─────────────────────────────────────
@@ -1851,12 +1855,15 @@ async function fbPickup() {
 
 async function fbPlayFaceDown(index, srcEl) {
   const srcRect = srcEl ? srcEl.getBoundingClientRect() : null;
+
+  // ── Step 1: commit the state change; return card + outcome for animation ──
+  let result = null;
   try {
-    await window.db.runTransaction(async t => {
+    result = await window.db.runTransaction(async t => {
       const snap = await t.get(roomRef(currentRoomCode));
       const s    = snap.data();
       const isClassic = s.gameMode === 'classic';
-      if (!isClassic && s.currentPlayerIndex !== myOnlineIndex) return;
+      if (!isClassic && s.currentPlayerIndex !== myOnlineIndex) return null;
       const players = s.players.map(p => ({
         ...p, hand: [...p.hand], faceUp: [...p.faceUp], faceDown: [...p.faceDown]
       }));
@@ -1876,16 +1883,15 @@ async function fbPlayFaceDown(index, srcEl) {
           lastPlayerIdx: null,
           lastActivity: firebase.firestore.FieldValue.serverTimestamp()
         });
-        return;
+        // Still reveal the card in the animation but don't fly to pile
+        return { card, wasPlayable: false, burned: false };
       }
-      // Animate the card flying to the pile (we know the card now)
-      if (srcRect && isCardPlayable(card, s.pile || [], s.sevenActive)) {
-        flyCardsToPile([card], [srcRect]);
-      }
+
       let pile = s.pile || [], sevenActive = s.sevenActive, dir = s.direction || 1, idx;
       let res = { reverseDirection: false, extraTurn: false, skipCount: 0, newSevenActive: false };
       const burnedPile = [...(s.burnedPile || [])];
-      if (!isCardPlayable(card, pile, sevenActive)) {
+      const wasPlayable = isCardPlayable(card, pile, sevenActive);
+      if (!wasPlayable) {
         me.hand = [...me.hand, card, ...pile];
         pile = []; sevenActive = false;
         idx  = advanceTurnBy(players, myOnlineIndex, 1, dir);
@@ -1901,8 +1907,6 @@ async function fbPlayFaceDown(index, srcEl) {
         me.finished = true; me.finishOrder = finishCounter++;
       }
       const active = players.filter(p => !p.finished);
-      // In Classic Mode: track who just played (for draw-timing check); null on pickup
-      const wasPlayable = isCardPlayable(card, s.pile || [], s.sevenActive);
       t.update(roomRef(currentRoomCode), {
         players, pile, burnedPile, sevenActive, direction: dir, currentPlayerIndex: idx, finishCounter,
         ...(isClassic ? { lastPlayerIdx: wasPlayable ? myOnlineIndex : null } : {}),
@@ -1910,8 +1914,30 @@ async function fbPlayFaceDown(index, srcEl) {
         phase:      active.length <= 1 ? 'ended' : s.phase,
         loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
       });
+      return { card, wasPlayable, burned: !!res.burned };
     });
-  } catch(e) { toast('Move failed: ' + e.message); }
+  } catch(e) { toast('Move failed: ' + e.message); return; }
+
+  if (!result) return;
+
+  // ── Step 2: play the flip animation now that the card identity is known ──
+  _fdFlipAnimating = true;
+  const centerRect = await flipFaceDownAnimation(result.card, srcRect);
+
+  if (result.wasPlayable) {
+    flyCardsToPile([result.card], [centerRect]);
+  }
+
+  if (result.burned) {
+    // Prevent renderOnlineGame's burn-count detector from double-firing
+    if (_lastOnlineState) {
+      _prevOnlineBurnCount = (_lastOnlineState.burnedPile || []).length;
+    }
+    await burnPileAnimation();
+  }
+
+  _fdFlipAnimating = false;
+  if (_lastOnlineState) renderOnlineGame(_lastOnlineState);
 }
 
 // ─── Online swap rendering ─────────────────────────────
@@ -1961,9 +1987,9 @@ document.getElementById('btn-swap-ready').onclick = function () {
 function renderOnlineGame(state) {
   if (!state) return;
 
-  // During the MISTAKE animation, just cache the state for after it finishes
+  // During MISTAKE or face-down flip animations, just cache the state for later
   _lastOnlineState = state;
-  if (_mistakeAnimating) return;
+  if (_mistakeAnimating || _fdFlipAnimating) return;
 
   // Detect a new pile burn and show fire animation (non-blocking for online)
   const newBurnCount = (state.burnedPile || []).length;
