@@ -32,6 +32,9 @@ function sortedHand(hand) {
 // Cached last online game state — used to re-render when sort mode changes mid-game
 let _lastOnlineState = null;
 
+// Track burned-pile length across online renders to detect new burns
+let _prevOnlineBurnCount = -1;
+
 // ═══════════════════════════════════════════════════════
 //  Utilities
 // ═══════════════════════════════════════════════════════
@@ -94,6 +97,154 @@ function flyCardsToPile(cards, rects) {
       el.style.opacity    = '0';
       setTimeout(() => el.remove(), 560);
     }));
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  Pile-burn fire animation  (Doom cellular-automaton + CSS flame tongues)
+// ═══════════════════════════════════════════════════════
+function burnPileAnimation() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+
+    const DURATION = 2200;                        // ms total
+    const FW = Math.round(rect.width  * 2.4);    // wider than pile — fire spreads
+    const FH = Math.round(rect.height * 3.5);    // tall — fire rises dramatically
+
+    // ── container (fixed, centred on pile, extends upward) ──────────────────
+    const wrap = document.createElement('div');
+    wrap.style.cssText = [
+      'position:fixed',
+      `left:${Math.round(rect.left + rect.width / 2 - FW / 2)}px`,
+      `top:${Math.round(rect.bottom - FH)}px`,
+      `width:${FW}px`,
+      `height:${FH}px`,
+      'pointer-events:none',
+      'z-index:1600',
+    ].join(';');
+    document.body.appendChild(wrap);
+
+    // ── initial flash — orange burst the instant fire erupts ────────────────
+    const flash = document.createElement('div');
+    flash.style.cssText = [
+      'position:absolute',
+      `left:${Math.round(FW / 2 - rect.width * 0.7)}px`,
+      `top:${FH - rect.height}px`,
+      `width:${Math.round(rect.width * 1.4)}px`,
+      `height:${rect.height}px`,
+      'background:radial-gradient(ellipse,rgba(255,230,80,.95) 0%,rgba(255,80,0,.55) 50%,transparent 80%)',
+      'border-radius:8px',
+      'transition:opacity .35s ease-out',
+    ].join(';');
+    wrap.appendChild(flash);
+    requestAnimationFrame(() => requestAnimationFrame(() => { flash.style.opacity = '0'; }));
+
+    // ── canvas — Doom-style cellular-automaton fire ──────────────────────────
+    const SCALE = 3;                    // downscale → pixelated look + fast
+    const CW = Math.ceil(FW / SCALE);
+    const CH = Math.ceil(FH / SCALE);
+    const canvas = document.createElement('canvas');
+    canvas.width  = CW;
+    canvas.height = CH;
+    canvas.style.cssText = [
+      'position:absolute', 'top:0', 'left:0',
+      'width:100%', 'height:100%',
+      'image-rendering:pixelated',
+      'image-rendering:crisp-edges',
+    ].join(';');
+    wrap.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    // Pre-compute colour palette: index 0-255 → RGBA
+    // 0 = transparent; low = dark red; mid = orange; high = yellow; max = white
+    const pal = new Uint8ClampedArray(256 * 4);
+    for (let i = 1; i < 256; i++) {
+      const t = i / 255;
+      pal[i*4]   = Math.min(255, (t * 3 * 255)              | 0); // R — full early
+      pal[i*4+1] = t < 0.35 ? 0 : Math.min(255,
+                     (((t - 0.35) / 0.65) * 255)            | 0); // G — orange/yellow
+      pal[i*4+2] = t < 0.78 ? 0 : Math.min(255,
+                     (((t - 0.78) / 0.22) * 255)            | 0); // B — white tips
+      pal[i*4+3] = Math.min(255, (Math.min(1, t * 2.2)*255) | 0); // A — builds quickly
+    }
+
+    const buf     = new Uint8Array(CW * CH);
+    const imgData = ctx.createImageData(CW, CH);
+    const pd      = imgData.data;
+
+    // ── CSS flame tongues layered over the canvas ────────────────────────────
+    for (let i = 0; i < 11; i++) {
+      const fl  = document.createElement('div');
+      const w   = (14 + Math.random() * 26) | 0;
+      const h   = (w * (1.5 + Math.random()))  | 0;
+      const x   = (FW * 0.05 + Math.random() * FW * 0.9 - w / 2) | 0;
+      const dur = (0.42 + Math.random() * 0.44).toFixed(2);
+      const del = (Math.random() * 0.55).toFixed(2);
+      fl.style.cssText = [
+        'position:absolute',
+        `left:${x}px`,
+        'bottom:0',
+        `width:${w}px`,
+        `height:${h}px`,
+        'border-radius:50% 50% 30% 30% / 55% 55% 45% 45%',
+        'transform-origin:50% 100%',
+        'background:radial-gradient(ellipse at 50% 80%,#ffe566 0%,#ff5500 45%,#cc1000 78%,transparent 100%)',
+        `animation:pile-flame-rise ${dur}s ease-in-out ${del}s infinite`,
+        'mix-blend-mode:screen',
+      ].join(';');
+      wrap.appendChild(fl);
+    }
+
+    // ── animation loop ───────────────────────────────────────────────────────
+    const t0 = performance.now();
+
+    function frame(now) {
+      const elapsed  = now - t0;
+      const progress = elapsed / DURATION;
+
+      // Feed heat to bottom row; taper off in final 35%
+      const maxHeat = progress < 0.65
+        ? 220 + ((Math.random() * 35) | 0)
+        : Math.max(0, ((1 - (progress - 0.65) / 0.35) * 245) | 0);
+
+      for (let x = 0; x < CW; x++) {
+        buf[(CH - 1) * CW + x] = maxHeat > 8
+          ? Math.max(0, maxHeat - ((Math.random() * 45) | 0))
+          : 0;
+      }
+
+      // Doom fire: each cell reads from one row below + random leftward drift + cooling
+      for (let y = 0; y < CH - 1; y++) {
+        for (let x = 0; x < CW; x++) {
+          const drift = (Math.random() * 3) | 0;          // 0, 1, or 2
+          const srcX  = Math.min(CW - 1, Math.max(0, x - drift + 1));
+          buf[y * CW + x] = Math.max(0, buf[(y + 1) * CW + srcX] - (drift & 1));
+        }
+      }
+
+      // Render buffer → ImageData
+      for (let i = 0; i < CW * CH; i++) {
+        const pi = buf[i] * 4;
+        pd[i*4]   = pal[pi];
+        pd[i*4+1] = pal[pi + 1];
+        pd[i*4+2] = pal[pi + 2];
+        pd[i*4+3] = pal[pi + 3];
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      if (elapsed < DURATION) {
+        requestAnimationFrame(frame);
+      } else {
+        wrap.style.transition = 'opacity 0.3s ease-out';
+        wrap.style.opacity    = '0';
+        setTimeout(() => { wrap.remove(); resolve(); }, 350);
+      }
+    }
+
+    requestAnimationFrame(frame);
   });
 }
 
@@ -410,7 +561,7 @@ function localPickup(playerIdx) {
 // ═══════════════════════════════════════════════════════
 //  LOCAL GAME  – bot turn
 // ═══════════════════════════════════════════════════════
-function botTakeTurn(botIdx) {
+async function botTakeTurn(botIdx) {
   const p = LG.players[botIdx];
   const decision = botChoosePlay(p, LG.pile, LG.sevenActive);
 
@@ -437,6 +588,7 @@ function botTakeTurn(botIdx) {
     const card    = p.faceDown[0];
     const srcRect = getBotSlotRect();
     p.faceDown.splice(0, 1);
+    let didBurn = false;
     if (!isCardPlayable(card, LG.pile, LG.sevenActive)) {
       p.hand.push(card, ...LG.pile);
       LG.pile = [];
@@ -445,12 +597,16 @@ function botTakeTurn(botIdx) {
     } else {
       if (srcRect) flyCardsToPile([card], [srcRect]);
       const res = resolvePlay([card], LG.pile, LG.sevenActive);
-      if (res.burned) LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
+      if (res.burned) {
+        LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
+        didBurn = true;
+      }
       LG.pile = res.newPile;
       LG.sevenActive = useSevenRule ? res.newSevenActive : false;
       localCheckFinished(botIdx);
       applyLocalTurnChange(botIdx, res);
     }
+    if (didBurn) await burnPileAnimation();
     afterBotAction();
     return;
   }
@@ -459,6 +615,7 @@ function botTakeTurn(botIdx) {
     const srcRect = getBotSlotRect();
     const res = localApplyPlay(botIdx, decision.cards);
     if (srcRect) flyCardsToPile(decision.cards, [srcRect]);
+    if (res.burned) await burnPileAnimation();
     applyLocalTurnChange(botIdx, res);
     afterBotAction();
   }
@@ -578,7 +735,7 @@ function toggleSelectCard(card, source) {
   }
 }
 
-function humanPlayFaceDown(faceDownIdx, srcEl) {
+async function humanPlayFaceDown(faceDownIdx, srcEl) {
   if (LG.currentPlayer !== 0) return;
   const p = LG.players[0];
   if (localPlayerPhase(p) !== 'faceDown') return;
@@ -587,6 +744,7 @@ function humanPlayFaceDown(faceDownIdx, srcEl) {
   const srcRect = srcEl ? srcEl.getBoundingClientRect() : null;
   p.faceDown.splice(faceDownIdx, 1);
 
+  let didBurn = false;
   if (!isCardPlayable(card, LG.pile, LG.sevenActive)) {
     p.hand.push(card, ...LG.pile);
     LG.pile = [];
@@ -596,16 +754,17 @@ function humanPlayFaceDown(faceDownIdx, srcEl) {
   } else {
     if (srcRect) flyCardsToPile([card], [srcRect]);
     const res = resolvePlay([card], LG.pile, LG.sevenActive);
-    if (res.burned) LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
+    if (res.burned) {
+      LG.burnedPile = [...(LG.burnedPile || []), ...LG.pile, card];
+      didBurn = true;
+    }
     LG.pile = res.newPile;
     LG.sevenActive = useSevenRule ? res.newSevenActive : false;
     localCheckFinished(0);
     localCheckGameOver();
-    if (LG.phase !== 'ended') {
-      if (res.burned) toast('Pile burned — extra turn!');
-      applyLocalTurnChange(0, res);
-    }
+    if (LG.phase !== 'ended') applyLocalTurnChange(0, res);
   }
+  if (didBurn) await burnPileAnimation();
   stageClear();
   renderLocalGame();
   if (LG.phase === 'ended') showGameOver();
@@ -1143,6 +1302,14 @@ document.getElementById('btn-swap-ready').onclick = function () {
 
 function renderOnlineGame(state) {
   if (!state) return;
+
+  // Detect a new pile burn and show fire animation (non-blocking for online)
+  const newBurnCount = (state.burnedPile || []).length;
+  if (_prevOnlineBurnCount >= 0 && newBurnCount > _prevOnlineBurnCount) {
+    burnPileAnimation();
+  }
+  _prevOnlineBurnCount = newBurnCount;
+
   _lastOnlineState = state;   // cache for sort-toggle re-render
   const me       = state.players[state.myIndex];
   const isMyTurn = state.currentPlayerIndex === state.myIndex;
@@ -1226,7 +1393,7 @@ document.getElementById('sort-by-suit').addEventListener('change', function () {
 
 // ─── Play / Pick-up buttons ────────────────────────────
 
-document.getElementById('btn-play-selected').onclick = function () {
+document.getElementById('btn-play-selected').onclick = async function () {
   if (!selectedCards.length) return;
   const cardsToPlay = [...selectedCards];
 
@@ -1249,11 +1416,9 @@ document.getElementById('btn-play-selected').onclick = function () {
     if (!isCardPlayable(cardsToPlay[0], LG.pile, LG.sevenActive)) { toast('Cannot play those cards'); return; }
     const res = localApplyPlay(0, cardsToPlay);
     if (srcRects.length) flyCardsToPile(cardsToPlay, srcRects);
+    if (res.burned) await burnPileAnimation();
     localCheckGameOver();
-    if (LG.phase !== 'ended') {
-      if (res.burned) toast('Pile burned — extra turn!');
-      applyLocalTurnChange(0, res);
-    }
+    if (LG.phase !== 'ended') applyLocalTurnChange(0, res);
     renderLocalGame();
     if (LG.phase === 'ended') showGameOver(); else scheduleTurn();
   }
