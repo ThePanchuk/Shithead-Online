@@ -131,7 +131,9 @@ function stageRemove(card) {
   const el = [...stage.querySelectorAll('.card')].find(e => e.dataset.id === card.id);
   if (el) {
     el.classList.add('stage-removing');
-    el.addEventListener('animationend', () => el.remove(), { once: true });
+    // Use timeout instead of animationend — more reliable when hover transforms
+    // or fast clicks interfere with the CSS animation event
+    setTimeout(() => el.remove(), 220);
   }
   const idx = selectedCards.findIndex(c => c.id === card.id);
   if (idx >= 0) selectedCards.splice(idx, 1);
@@ -147,6 +149,8 @@ function stageRemove(card) {
 // Clear all staged cards (called on turn change, pickup, etc.)
 function stageClear() {
   document.getElementById('card-stage').innerHTML = '';
+  // Restore every staged-out ghost in the hand fan
+  document.querySelectorAll('#human-hand .card.staged-out').forEach(el => el.classList.remove('staged-out'));
   selectedCards = [];
   stageHide();
 }
