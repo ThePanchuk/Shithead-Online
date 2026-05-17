@@ -896,6 +896,73 @@ a { color: #7ec88a; }
   pointer-events: none;
 }
 
+/* ═══════════════════════════════════════════════════════
+   Card staging  —  selected hand cards float to centre
+   ═══════════════════════════════════════════════════════ */
+
+/* Blur/dim overlay — sits below action-bar (z 5) so bar stays usable */
+#card-stage-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.30);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  z-index: 3;          /* below action-bar(5); above table content */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .22s ease;
+}
+#card-stage-overlay.active { opacity: 1; }
+
+/* Staged card container — centred in upper part of screen */
+#card-stage {
+  position: fixed;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;          /* above action-bar so cards appear in front */
+  pointer-events: none;
+}
+#card-stage.active { pointer-events: auto; }
+
+/* Staged card appearance */
+#card-stage .card {
+  /* use default pile-card size, not the enlarged hand size */
+  width: var(--card-w);
+  height: var(--card-h);
+  box-shadow: 0 24px 64px rgba(0,0,0,.70), 0 0 0 2px rgba(255,255,255,.18);
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  animation: stage-card-in .26s cubic-bezier(0.34,1.46,0.64,1) both;
+}
+#card-stage .card:hover {
+  transform: translateY(-8px) scale(1.04);
+  box-shadow: 0 32px 72px rgba(0,0,0,.80), 0 0 0 2px rgba(255,255,255,.30);
+}
+#card-stage .card.stage-removing {
+  animation: stage-card-out .18s ease-in both;
+  pointer-events: none;
+}
+
+/* Hand card that has been staged → invisible placeholder (keeps fan spacing) */
+.hand-fan .card.staged-out {
+  opacity: 0;
+  pointer-events: none !important;
+}
+
+@keyframes stage-card-in {
+  from { transform: scale(0.55) translateY(40px); opacity: 0; }
+  to   { transform: scale(1)    translateY(0);    opacity: 1; }
+}
+@keyframes stage-card-out {
+  from { transform: scale(1)    translateY(0);    opacity: 1; }
+  to   { transform: scale(0.55) translateY(30px); opacity: 0; }
+}
+
 /* ── Hand sort toggle (rank ↔ suit) ── */
 .hand-sort-toggle {
   display: inline-flex;

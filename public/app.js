@@ -98,6 +98,60 @@ function flyCardsToPile(cards, rects) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Card staging  —  selected hand cards float to centre
+// ═══════════════════════════════════════════════════════
+
+function stageShow() {
+  document.getElementById('card-stage-overlay').classList.add('active');
+  document.getElementById('card-stage').classList.add('active');
+}
+function stageHide() {
+  document.getElementById('card-stage-overlay').classList.remove('active');
+  document.getElementById('card-stage').classList.remove('active');
+}
+
+// Add a card to the floating stage area
+function stageAdd(card) {
+  const stage = document.getElementById('card-stage');
+  const el = makeCardEl(card);
+  el.onclick = () => stageRemove(card);
+  stage.appendChild(el);
+  selectedCards.push(card);
+  stageShow();
+  // Grey-out the placeholder in the hand fan
+  const handEl = document.querySelector(`#human-hand [data-id="${card.id}"]`);
+  if (handEl) handEl.classList.add('staged-out');
+  // Enable Play button
+  document.getElementById('btn-play-selected').classList.remove('btn-action-dim');
+}
+
+// Remove a card from the stage and return it to the hand
+function stageRemove(card) {
+  const stage = document.getElementById('card-stage');
+  const el = [...stage.querySelectorAll('.card')].find(e => e.dataset.id === card.id);
+  if (el) {
+    el.classList.add('stage-removing');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }
+  const idx = selectedCards.findIndex(c => c.id === card.id);
+  if (idx >= 0) selectedCards.splice(idx, 1);
+  // Restore the hand ghost
+  const handEl = document.querySelector(`#human-hand [data-id="${card.id}"]`);
+  if (handEl) handEl.classList.remove('staged-out');
+  if (selectedCards.length === 0) {
+    stageHide();
+    document.getElementById('btn-play-selected').classList.add('btn-action-dim');
+  }
+}
+
+// Clear all staged cards (called on turn change, pickup, etc.)
+function stageClear() {
+  document.getElementById('card-stage').innerHTML = '';
+  selectedCards = [];
+  stageHide();
+}
+
+// ═══════════════════════════════════════════════════════
 //  Card DOM helpers
 // ═══════════════════════════════════════════════════════
 function makeCardEl(card, opts = {}) {
@@ -448,10 +502,14 @@ function renderLocalGame() {
   const handN = displayHand.length;
   const fanSpread = Math.min(44, handN * 5);
   displayHand.forEach((card, i) => {
-    const canPlay = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, LG.pile, LG.sevenActive);
-    const sel = selectedCards.some(c => c.id === card.id);
-    const el = makeCardEl(card, { selected: sel, unplayable: isMyTurn && humanPhase === 'hand' && !canPlay });
-    if (isMyTurn && humanPhase === 'hand') el.onclick = () => toggleSelectCard(card, 'hand');
+    const isStaged = selectedCards.some(c => c.id === card.id);
+    const canPlay  = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, LG.pile, LG.sevenActive);
+    const el = makeCardEl(card, { unplayable: isMyTurn && humanPhase === 'hand' && !canPlay && !isStaged });
+    if (isStaged) {
+      el.classList.add('staged-out');
+    } else if (isMyTurn && humanPhase === 'hand') {
+      el.onclick = () => toggleSelectCard(card, 'hand');
+    }
     const angle = handN > 1 ? ((i / (handN - 1)) - 0.5) * fanSpread : 0;
     el.style.setProperty('--fan-angle', `${angle.toFixed(1)}deg`);
     el.style.zIndex = i + 1;
@@ -488,14 +546,25 @@ function escHtml(s) {
 //  LOCAL GAME  – human interaction
 // ═══════════════════════════════════════════════════════
 function toggleSelectCard(card, source) {
-  const idx = selectedCards.findIndex(c => c.id === card.id);
-  if (idx >= 0) {
-    selectedCards.splice(idx, 1);
+  if (source === 'hand') {
+    // Hand cards use the floating stage system
+    if (selectedCards.some(c => c.id === card.id)) {
+      stageRemove(card);
+    } else {
+      if (selectedCards.length > 0 && selectedCards[0].rank !== card.rank) stageClear();
+      stageAdd(card);
+    }
   } else {
-    if (selectedCards.length > 0 && selectedCards[0].rank !== card.rank) selectedCards = [];
-    selectedCards.push(card);
+    // Face-up tableau cards: classic in-place selection (they don't fly to stage)
+    const idx = selectedCards.findIndex(c => c.id === card.id);
+    if (idx >= 0) {
+      selectedCards.splice(idx, 1);
+    } else {
+      if (selectedCards.length > 0 && selectedCards[0].rank !== card.rank) stageClear();
+      selectedCards.push(card);
+    }
+    renderLocalGame();
   }
-  renderLocalGame();
 }
 
 function humanPlayFaceDown(faceDownIdx, srcEl) {
@@ -526,7 +595,7 @@ function humanPlayFaceDown(faceDownIdx, srcEl) {
       applyLocalTurnChange(0, res);
     }
   }
-  selectedCards = [];
+  stageClear();
   renderLocalGame();
   if (LG.phase === 'ended') showGameOver();
   else scheduleTurn();
@@ -781,7 +850,7 @@ function subscribeRoom(code) {
     if (!snap.exists) {
       // Room was deleted (host left, expired, etc.)
       stopRoom();
-      OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
+      OG = null; mode = null; myOnlineIndex = null; stageClear();
       document.getElementById('online-join-panel').classList.remove('hidden');
       document.getElementById('online-lobby-panel').classList.add('hidden');
       showScreen('screen-online');
@@ -950,7 +1019,8 @@ async function fbPlayCards(cards) {
       });
     });
   } catch(e) { toast('Move failed: ' + e.message); }
-  selectedCards = [];
+  // stageClear already called before fbPlayCards; ensure clean state
+  stageClear();
 }
 
 async function fbPickup() {
@@ -968,7 +1038,7 @@ async function fbPickup() {
       });
     });
   } catch(e) { toast('Pick up failed: ' + e.message); }
-  selectedCards = [];
+  stageClear();
 }
 
 async function fbPlayFaceDown(index, srcEl) {
@@ -1049,7 +1119,7 @@ document.getElementById('btn-swap-ready').onclick = function () {
   if (mode === 'local') {
     LG.phase = 'play';
     LG.currentPlayer = findFirstPlayer(LG.players);
-    selectedCards = [];
+    stageClear();
     showScreen('screen-game');
     renderLocalGame();
     scheduleTurn();
@@ -1065,6 +1135,8 @@ function renderOnlineGame(state) {
   _lastOnlineState = state;   // cache for sort-toggle re-render
   const me       = state.players[state.myIndex];
   const isMyTurn = state.currentPlayerIndex === state.myIndex;
+  // If it's no longer the human's turn, clear any staged cards
+  if (!isMyTurn && selectedCards.length > 0) stageClear();
   const humanPhase = me.finished ? 'done' :
     (state.hand.length > 0      ? 'hand'     :
      (me.faceUp.length > 0      ? 'faceUp'   :
@@ -1098,10 +1170,14 @@ function renderOnlineGame(state) {
   const handN = displayHand.length;
   const fanSpread = Math.min(44, handN * 5);
   displayHand.forEach((card, i) => {
-    const canPlay = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, state.pile, state.sevenActive);
-    const sel = selectedCards.some(c => c.id === card.id);
-    const el = makeCardEl(card, { selected: sel, unplayable: isMyTurn && humanPhase === 'hand' && !canPlay });
-    if (isMyTurn && humanPhase === 'hand') el.onclick = () => onlineToggleSelect(card);
+    const isStaged = selectedCards.some(c => c.id === card.id);
+    const canPlay  = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, state.pile, state.sevenActive);
+    const el = makeCardEl(card, { unplayable: isMyTurn && humanPhase === 'hand' && !canPlay && !isStaged });
+    if (isStaged) {
+      el.classList.add('staged-out');
+    } else if (isMyTurn && humanPhase === 'hand') {
+      el.onclick = () => onlineToggleSelect(card);
+    }
     const angle = handN > 1 ? ((i / (handN - 1)) - 0.5) * fanSpread : 0;
     el.style.setProperty('--fan-angle', `${angle.toFixed(1)}deg`);
     el.style.zIndex = i + 1;
@@ -1121,14 +1197,12 @@ function renderOnlineGame(state) {
 }
 
 function onlineToggleSelect(card) {
-  const idx = selectedCards.findIndex(c => c.id === card.id);
-  if (idx >= 0) {
-    selectedCards.splice(idx, 1);
+  if (selectedCards.some(c => c.id === card.id)) {
+    stageRemove(card);
   } else {
-    if (selectedCards.length > 0 && selectedCards[0].rank !== card.rank) selectedCards = [];
-    selectedCards.push(card);
+    if (selectedCards.length > 0 && selectedCards[0].rank !== card.rank) stageClear();
+    stageAdd(card);
   }
-  renderOnlineGame(OG);
 }
 
 // ─── Hand sort toggle ──────────────────────────────────
@@ -1142,23 +1216,28 @@ document.getElementById('sort-by-suit').addEventListener('change', function () {
 // ─── Play / Pick-up buttons ────────────────────────────
 
 document.getElementById('btn-play-selected').onclick = function () {
-  // Capture source rects before any DOM changes
-  const playEls  = [...document.querySelectorAll('#human-hand .card.selected, #human-stacks .card.selected')];
-  const srcRects = playEls.map(el => el.getBoundingClientRect());
+  if (!selectedCards.length) return;
+  const cardsToPlay = [...selectedCards];
+
+  // Source rects: staged cards in center (hand plays) OR selected face-up stacks
+  const stageEls = [...document.querySelectorAll('#card-stage .card')];
+  const srcRects = stageEls.length
+    ? stageEls.map(el => el.getBoundingClientRect())
+    : [...document.querySelectorAll('#human-stacks .card.selected')].map(el => el.getBoundingClientRect());
+
+  stageClear();   // clear stage + selectedCards before game state mutations
 
   if (mode === 'online') {
-    if (!selectedCards.length) return;
-    if (srcRects.length) flyCardsToPile(selectedCards, srcRects);
-    fbPlayCards(selectedCards);
+    if (srcRects.length) flyCardsToPile(cardsToPlay, srcRects);
+    fbPlayCards(cardsToPlay);
   } else {
-    if (!LG || !selectedCards.length) return;
+    if (!LG) return;
     const p     = LG.players[0];
     const phase = localPlayerPhase(p);
     if (LG.currentPlayer !== 0 || !['hand','faceUp'].includes(phase)) return;
-    if (!isCardPlayable(selectedCards[0], LG.pile, LG.sevenActive)) { toast('Cannot play those cards'); return; }
-    const res = localApplyPlay(0, selectedCards);
-    if (srcRects.length) flyCardsToPile(selectedCards, srcRects);
-    selectedCards = [];
+    if (!isCardPlayable(cardsToPlay[0], LG.pile, LG.sevenActive)) { toast('Cannot play those cards'); return; }
+    const res = localApplyPlay(0, cardsToPlay);
+    if (srcRects.length) flyCardsToPile(cardsToPlay, srcRects);
     localCheckGameOver();
     if (LG.phase !== 'ended') {
       if (res.burned) toast('Pile burned — extra turn!');
@@ -1171,11 +1250,12 @@ document.getElementById('btn-play-selected').onclick = function () {
 
 document.getElementById('btn-pickup').onclick = function () {
   if (mode === 'online') {
+    stageClear();
     fbPickup();
   } else {
     if (!LG) return;
+    stageClear();
     localPickup(0);
-    selectedCards = [];
     localAdvanceTurn(0);
     localCheckGameOver();
     renderLocalGame();
@@ -1238,7 +1318,7 @@ document.getElementById('btn-start-online').onclick = () => startOnlineGame();
 document.getElementById('btn-leave-room').onclick = () => {
   const code = currentRoomCode;
   stopRoom(); // unsubscribe before deleting so our own listener doesn't react
-  OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
+  OG = null; mode = null; myOnlineIndex = null; stageClear();
   document.getElementById('online-join-panel').classList.remove('hidden');
   document.getElementById('online-lobby-panel').classList.add('hidden');
   showScreen('screen-menu');
@@ -1247,18 +1327,18 @@ document.getElementById('btn-leave-room').onclick = () => {
 };
 
 document.getElementById('btn-go-menu').onclick = () => {
-  LG = null; OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
+  LG = null; OG = null; mode = null; myOnlineIndex = null; stageClear();
   stopRoom();
   showScreen('screen-menu');
 };
 
 document.getElementById('btn-go-again').onclick = () => {
   if (mode === 'local') {
-    LG = null; selectedCards = [];
+    LG = null; stageClear();
     showScreen('screen-local-setup');
   } else {
     stopRoom();
-    LG = null; OG = null; selectedCards = []; mode = null; myOnlineIndex = null;
+    LG = null; OG = null; mode = null; myOnlineIndex = null; stageClear();
     showScreen('screen-menu');
   }
 };
