@@ -344,13 +344,12 @@ a { color: #7ec88a; }
 #swap-hand .card { cursor: grab; }
 #swap-hand .card:active { cursor: grabbing; }
 
-/* Ghost card that follows the cursor */
+/* Ghost card that follows the cursor.
+   position / transform / size are set as inline styles in JS (beats class specificity). */
 .swap-drag-ghost {
-  position: fixed;
   pointer-events: none;
   z-index: 2000;
   opacity: 0.88;
-  transform: rotate(5deg) scale(1.07);
   box-shadow: 0 18px 36px rgba(0,0,0,.75);
   transition: none !important;
 }

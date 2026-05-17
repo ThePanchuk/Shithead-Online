@@ -498,18 +498,25 @@ function _swapBeginDrag(sourceEl, handIdx, clientX, clientY, onSwap) {
   const rect  = sourceEl.getBoundingClientRect();
   const ghost = sourceEl.cloneNode(true);
   ghost.classList.add('swap-drag-ghost');
-  ghost.style.width  = rect.width  + 'px';
-  ghost.style.height = rect.height + 'px';
-  ghost.style.left   = (clientX - rect.width  / 2) + 'px';
-  ghost.style.top    = (clientY - rect.height / 2) + 'px';
+  // Inline position:fixed beats any class-level position:relative on .card
+  ghost.style.position = 'fixed';
+  ghost.style.left     = '0';
+  ghost.style.top      = '0';
+  ghost.style.width    = rect.width  + 'px';
+  ghost.style.height   = rect.height + 'px';
+  ghost.style.transition = 'none';
+  // Position via transform so GPU handles movement (no layout reflow)
+  const _setPos = (x, y) => {
+    ghost.style.transform = `translate(${x - rect.width / 2}px, ${y - rect.height / 2}px) rotate(5deg) scale(1.07)`;
+  };
+  _setPos(clientX, clientY);   // place at cursor before appending → no flash
   document.body.appendChild(ghost);
   sourceEl.classList.add('swap-drag-source');
   _swapDrag = { handIdx, ghost, sourceEl, targetEl: null,
                 _mm: null, _mu: null, _tm: null, _te: null };
 
   const move = (x, y) => {
-    ghost.style.left = (x - rect.width  / 2) + 'px';
-    ghost.style.top  = (y - rect.height / 2) + 'px';
+    _setPos(x, y);
     _swapHighlight(x, y);
   };
   const drop = (x, y) => {
