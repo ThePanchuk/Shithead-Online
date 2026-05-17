@@ -340,6 +340,34 @@ a { color: #7ec88a; }
 .swap-arrow { font-size: 1.5rem; color: #5a9a5e; letter-spacing: .3rem; }
 .swap-status { font-size: .87rem; color: var(--gold); min-height: 1.3em; text-align: center; }
 
+/* ── Drag-and-drop swap ── */
+#swap-hand .card { cursor: grab; }
+#swap-hand .card:active { cursor: grabbing; }
+
+/* Ghost card that follows the cursor */
+.swap-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 2000;
+  opacity: 0.88;
+  transform: rotate(5deg) scale(1.07);
+  box-shadow: 0 18px 36px rgba(0,0,0,.75);
+  transition: none !important;
+}
+/* Original card being dragged — faded out */
+.swap-drag-source {
+  opacity: 0.28;
+  transition: opacity .1s;
+}
+/* Face-up card highlighted as valid drop target */
+.swap-drop-target {
+  outline: 3px solid var(--gold) !important;
+  box-shadow: 0 0 16px rgba(212,168,32,.55) !important;
+  transform: translateY(-8px) scale(1.06) !important;
+  z-index: 5;
+  transition: transform .12s, box-shadow .12s;
+}
+
 /* ═══════════════════════════════════════════════════════
    Cards – shared
    ═══════════════════════════════════════════════════════ */

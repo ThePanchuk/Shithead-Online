@@ -6,7 +6,7 @@ let mode   = null;   // 'local' | 'online'
 // Local game state
 let LG = null;
 let selectedCards = [];
-let swapHandIdx = -1;
+let _swapDrag = null;   // drag-and-drop state for the swap screen
 
 // Online game state
 let OG = null;
@@ -460,6 +460,78 @@ function humanPlayFaceDown(faceDownIdx) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  SWAP PHASE  — drag-and-drop helpers
+// ═══════════════════════════════════════════════════════
+
+function _swapDragCleanup() {
+  if (!_swapDrag) return;
+  if (_swapDrag.ghost)    _swapDrag.ghost.remove();
+  if (_swapDrag.sourceEl) _swapDrag.sourceEl.classList.remove('swap-drag-source');
+  if (_swapDrag.targetEl) _swapDrag.targetEl.classList.remove('swap-drop-target');
+  document.removeEventListener('mousemove', _swapDrag._mm);
+  document.removeEventListener('mouseup',   _swapDrag._mu);
+  document.removeEventListener('touchmove', _swapDrag._tm);
+  document.removeEventListener('touchend',  _swapDrag._te);
+  _swapDrag = null;
+}
+
+// Returns the face-up card element under (x, y), or null.
+// Temporarily hides the ghost so it doesn't block elementFromPoint.
+function _swapTargetAt(x, y) {
+  if (_swapDrag?.ghost) _swapDrag.ghost.style.visibility = 'hidden';
+  const el = document.elementFromPoint(x, y);
+  if (_swapDrag?.ghost) _swapDrag.ghost.style.visibility = '';
+  return el?.closest('.swap-fu-card') || null;
+}
+
+function _swapHighlight(x, y) {
+  const target = _swapTargetAt(x, y);
+  if (_swapDrag.targetEl && _swapDrag.targetEl !== target)
+    _swapDrag.targetEl.classList.remove('swap-drop-target');
+  if (target) target.classList.add('swap-drop-target');
+  _swapDrag.targetEl = target;
+}
+
+// Core drag initiator — shared by local and online swap screens.
+function _swapBeginDrag(sourceEl, handIdx, clientX, clientY, onSwap) {
+  if (_swapDrag) return;
+  const rect  = sourceEl.getBoundingClientRect();
+  const ghost = sourceEl.cloneNode(true);
+  ghost.classList.add('swap-drag-ghost');
+  ghost.style.width  = rect.width  + 'px';
+  ghost.style.height = rect.height + 'px';
+  ghost.style.left   = (clientX - rect.width  / 2) + 'px';
+  ghost.style.top    = (clientY - rect.height / 2) + 'px';
+  document.body.appendChild(ghost);
+  sourceEl.classList.add('swap-drag-source');
+  _swapDrag = { handIdx, ghost, sourceEl, targetEl: null,
+                _mm: null, _mu: null, _tm: null, _te: null };
+
+  const move = (x, y) => {
+    ghost.style.left = (x - rect.width  / 2) + 'px';
+    ghost.style.top  = (y - rect.height / 2) + 'px';
+    _swapHighlight(x, y);
+  };
+  const drop = (x, y) => {
+    const target = _swapTargetAt(x, y);
+    const hi     = _swapDrag.handIdx;
+    _swapDragCleanup();
+    if (target) onSwap(hi, parseInt(target.dataset.fuIdx));
+    // no target → ghost removed, card snaps back silently
+  };
+
+  _swapDrag._mm = e => move(e.clientX, e.clientY);
+  _swapDrag._mu = e => drop(e.clientX, e.clientY);
+  _swapDrag._tm = e => { e.preventDefault(); const t = e.touches[0]; move(t.clientX, t.clientY); };
+  _swapDrag._te = e => { const t = e.changedTouches[0]; drop(t.clientX, t.clientY); };
+
+  document.addEventListener('mousemove', _swapDrag._mm);
+  document.addEventListener('mouseup',   _swapDrag._mu);
+  document.addEventListener('touchmove', _swapDrag._tm, { passive: false });
+  document.addEventListener('touchend',  _swapDrag._te);
+}
+
+// ═══════════════════════════════════════════════════════
 //  SWAP PHASE  (local)
 // ═══════════════════════════════════════════════════════
 function renderSwap(hand, faceUp) {
@@ -470,28 +542,25 @@ function renderSwap(hand, faceUp) {
 
   faceUp.forEach((card, i) => {
     const el = makeCardEl(card);
-    el.onclick = () => {
-      if (swapHandIdx < 0) { toast('Select a hand card first'); return; }
-      const tmp = hand[swapHandIdx];
-      hand[swapHandIdx] = card;
-      faceUp[i] = tmp;
-      swapHandIdx = -1;
-      renderSwap(hand, faceUp);
-    };
+    el.classList.add('swap-fu-card');
+    el.dataset.fuIdx = i;
     fuZone.appendChild(el);
   });
 
   hand.forEach((card, i) => {
-    const sel = (swapHandIdx === i);
-    const el = makeCardEl(card, { selected: sel });
-    el.onclick = () => { swapHandIdx = (swapHandIdx === i) ? -1 : i; renderSwap(hand, faceUp); };
+    const el = makeCardEl(card);
+    const startDrag = (cx, cy) => _swapBeginDrag(el, i, cx, cy, (hi, fi) => {
+      const tmp = hand[hi]; hand[hi] = faceUp[fi]; faceUp[fi] = tmp;
+      renderSwap(hand, faceUp);
+    });
+    el.addEventListener('mousedown',  e => { e.preventDefault(); startDrag(e.clientX, e.clientY); });
+    el.addEventListener('touchstart', e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
     hZone.appendChild(el);
   });
 }
 
 function startLocalSwap() {
   const human = LG.players[0];
-  swapHandIdx = -1;
   for (let i = 1; i < LG.players.length; i++) {
     const bot = LG.players[i];
     const swapped = botSwap(bot.hand, bot.faceUp);
@@ -579,6 +648,7 @@ function stopRoom() {
   if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
   currentRoomCode = null;
   _swapShown = false;
+  _swapDragCleanup();
 }
 
 // ─── Create / Join ─────────────────────────────────────
@@ -683,7 +753,6 @@ function onRoomUpdate(s) {
       if (!OG) OG = {};
       OG._swapHand   = [...(me.hand   || [])];
       OG._swapFaceUp = [...(me.faceUp || [])];
-      swapHandIdx = -1;
       showScreen('screen-swap');
       document.getElementById('btn-swap-ready').disabled = false;
       document.getElementById('swap-status').textContent = '';
@@ -872,20 +941,19 @@ function renderOnlineSwap() {
 
   (OG._swapFaceUp || []).forEach((card, i) => {
     const el = makeCardEl(card);
-    el.onclick = () => {
-      if (swapHandIdx < 0) { toast('Select a hand card first'); return; }
-      const tmp = OG._swapHand[swapHandIdx];
-      OG._swapHand[swapHandIdx] = card;
-      OG._swapFaceUp[i] = tmp;
-      swapHandIdx = -1;
-      renderOnlineSwap();
-    };
+    el.classList.add('swap-fu-card');
+    el.dataset.fuIdx = i;
     fuZone.appendChild(el);
   });
 
   (OG._swapHand || []).forEach((card, i) => {
-    const el = makeCardEl(card, { selected: swapHandIdx === i });
-    el.onclick = () => { swapHandIdx = (swapHandIdx === i) ? -1 : i; renderOnlineSwap(); };
+    const el = makeCardEl(card);
+    const startDrag = (cx, cy) => _swapBeginDrag(el, i, cx, cy, (hi, fi) => {
+      const tmp = OG._swapHand[hi]; OG._swapHand[hi] = OG._swapFaceUp[fi]; OG._swapFaceUp[fi] = tmp;
+      renderOnlineSwap();
+    });
+    el.addEventListener('mousedown',  e => { e.preventDefault(); startDrag(e.clientX, e.clientY); });
+    el.addEventListener('touchstart', e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
     hZone.appendChild(el);
   });
 }
