@@ -130,8 +130,12 @@ function stageRemove(card) {
   const stage = document.getElementById('card-stage');
   const el = [...stage.querySelectorAll('.card')].find(e => e.dataset.id === card.id);
   if (el) {
-    // Drive the exit with inline styles — they beat CSS class rules and the
-    // hover :hover transform, so the card reliably shrinks and fades out.
+    // 1. Cancel the stage-card-in animation (animation-fill-mode:both keeps its
+    //    final values locked above inline styles in the cascade — clearing the
+    //    animation first lets inline styles take effect).
+    el.style.animation     = 'none';
+    void el.offsetHeight;  // force reflow so the cancellation is committed
+    // 2. Now inline styles win and the transition fires correctly.
     el.style.transition    = 'transform 0.18s ease-in, opacity 0.18s ease-in';
     el.style.transform     = 'scale(0.5) translateY(20px)';
     el.style.opacity       = '0';
