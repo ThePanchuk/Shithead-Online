@@ -56,11 +56,13 @@ Live at: `https://thepanchuk.com/shithead/`
 ## Deployment
 ```
 git push                          # triggers GitHub Actions
-# → wlixcc/SFTP-Deploy-Action
-# → uploads public/ to dist/shithead/ on IONOS
+# → lftp via sudo apt-get install -y lftp
+# → uploads public/ to dist/shithead/ on IONOS via SFTP
 # → live in ~30 seconds
 ```
-IONOS is **SFTP-only** — no SSH shell. The deploy action creates missing dirs automatically.
+IONOS is **SFTP-only** — no SSH shell. Deploy uses `lftp` with
+`sftp:connect-program "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"`.
+`wlixcc/SFTP-Deploy-Action` is broken on current GitHub runners — do not use it.
 
 ## Firebase
 - Project: `claude-cd59e`

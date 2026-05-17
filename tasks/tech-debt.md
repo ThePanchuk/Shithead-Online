@@ -58,6 +58,19 @@ Requires careful index management or switching to a player-ID-keyed map instead 
 
 ---
 
+## [UX] Card-fly animation missing for online opponents
+**Severity:** Low
+**Current state:** `flyCardsToPile` fires for the local human player (local + online) and
+for bots in local mode. When an online opponent plays, the pile just updates instantly —
+no animation.
+**Ideal fix:** In `renderOnlineGame`, compare the new pile length to the previous render's
+pile length. If it grew and `state.currentPlayerIndex !== myOnlineIndex`, animate from the
+current opponent's slot rect using `flyCardsToPile`.
+**Deferred because:** Requires caching the previous render state and extra logic in the
+Firestore subscription callback. Medium complexity for a cosmetic improvement.
+
+---
+
 ## [UX] No reconnect handling for online games
 **Severity:** Medium
 **Current state:** If a player's browser refreshes or disconnects mid-game, they lose
