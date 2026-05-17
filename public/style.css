@@ -11,9 +11,9 @@
   --card-sm-w: 40px;
   --card-sm-h: 56px;
 
-  /* Hand fan uses 30% larger cards; calc() auto-updates at every breakpoint */
-  --hand-card-w: calc(var(--card-w) * 1.3);
-  --hand-card-h: calc(var(--card-h) * 1.3);
+  /* Hand fan uses 69% larger cards (1.3 × 1.3); calc() auto-updates at every breakpoint */
+  --hand-card-w: calc(var(--card-w) * 1.69);
+  --hand-card-h: calc(var(--card-h) * 1.69);
 
   /* Fan layout */
   --card-peek: 22px;   /* visible strip of each overlapping card */
