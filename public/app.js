@@ -16,8 +16,8 @@ let myOnlineIndex = null;
 let useSevenRule = true;
 
 // Hand sort mode — 'rank' (by number) or 'suit' (by suit then number)
+// SUIT_ORDER is already declared globally in gameLogic.js — reuse it here.
 let handSortMode = 'rank';
-const SUIT_ORDER  = { '♣': 0, '♦': 1, '♥': 2, '♠': 3 };
 
 function sortedHand(hand) {
   const h = [...hand]; // never mutate the game-state array
