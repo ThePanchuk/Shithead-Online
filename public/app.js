@@ -68,15 +68,21 @@ function flyCardsToPile(cards, rects) {
   if (!to.width) return;
   const tx = to.left + to.width  / 2;
   const ty = to.top  + to.height / 2;
+  // Card size comes from CSS custom properties — never from the source rect,
+  // so bot opponent-slot rects (which are wider than a card) don't inflate the ghost.
+  const cs    = getComputedStyle(document.documentElement);
+  const cardW = parseFloat(cs.getPropertyValue('--card-w'));
+  const cardH = parseFloat(cs.getPropertyValue('--card-h'));
   cards.forEach((card, i) => {
-    const src = rects[Math.min(i, rects.length - 1)];
-    const el  = makeCardEl(card);
+    const src  = rects[Math.min(i, rects.length - 1)];
+    // Centre the ghost on the source area regardless of whether it's a card or a slot
+    const sx   = src.left + src.width  / 2 - cardW / 2;
+    const sy   = src.top  + src.height / 2 - cardH / 2;
+    const el   = makeCardEl(card);
     el.style.position      = 'fixed';
     el.style.left          = '0';
     el.style.top           = '0';
-    el.style.width         = src.width  + 'px';
-    el.style.height        = src.height + 'px';
-    el.style.transform     = `translate(${src.left}px,${src.top}px)`;
+    el.style.transform     = `translate(${sx}px,${sy}px)`;
     el.style.transition    = 'none';
     el.style.pointerEvents = 'none';
     el.style.zIndex        = String(1500 + i);
@@ -84,7 +90,7 @@ function flyCardsToPile(cards, rects) {
     // Double-rAF: first paints initial position, second starts the move
     requestAnimationFrame(() => requestAnimationFrame(() => {
       el.style.transition = 'transform 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.12s 0.3s';
-      el.style.transform  = `translate(${tx - src.width / 2}px,${ty - src.height / 2}px) scale(0.55)`;
+      el.style.transform  = `translate(${tx - cardW / 2}px,${ty - cardH / 2}px) scale(0.55)`;
       el.style.opacity    = '0';
       setTimeout(() => el.remove(), 520);
     }));
