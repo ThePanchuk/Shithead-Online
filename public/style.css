@@ -494,21 +494,22 @@ a { color: #7ec88a; }
 .hand-fan-scroll {
   width: 100%;
   overflow-x: auto;
-  /* padding-top gives headroom for the card to pop into */
-  padding: var(--fan-pop) 6px 4px 6px;
-  /* hide scrollbar visually but keep it functional */
+  /* extra top padding: --fan-pop for hover + ~8px for rotated card corners */
+  padding: calc(var(--fan-pop) + 8px) 20px 4px;
+  /* centre the fan when it's narrower than the screen */
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  /* smooth momentum scroll on iOS */
   scroll-behavior: smooth;
 }
 .hand-fan-scroll::-webkit-scrollbar { display: none; }
 
 .hand-fan {
-  display: inline-flex;   /* shrink to content width */
+  display: flex;
   align-items: flex-end;
-  /* a little right padding so last card has breathing room */
-  padding-right: 10px;
+  flex-shrink: 0;   /* never compress the fan */
 }
 
 /* Every card except the first overlaps the previous one */
@@ -516,33 +517,40 @@ a { color: #7ec88a; }
   margin-left: calc(var(--card-peek) - var(--card-w));
 }
 
-/* ── Override global :hover for fan cards ── */
-.hand-fan .card:hover {
-  /* reset global rule */
-  transform: none;
+/* Fan rotation — angle set per-card via JS as --fan-angle CSS variable.
+   transform-origin: bottom center makes cards spread from a single hand-hold point. */
+.hand-fan .card {
+  transform-origin: bottom center;
+  transform: rotate(var(--fan-angle, 0deg));
+  transition: transform .15s, box-shadow .15s, z-index 0s;
 }
-/* Only playable cards pop up on hover */
+
+/* Override global :hover; keep the rotation */
+.hand-fan .card:hover {
+  transform: rotate(var(--fan-angle, 0deg));
+}
+/* Playable cards pop upward on hover */
 .hand-fan .card:not(.unplayable):hover {
-  transform: translateY(calc(-1 * var(--fan-pop)));
+  transform: rotate(var(--fan-angle, 0deg)) translateY(calc(-1 * var(--fan-pop)));
   z-index: 10;
   box-shadow: 0 10px 22px rgba(0,0,0,.65);
 }
 
-/* Selected card: fully revealed on top */
+/* Selected card: pop up + gold outline */
 .hand-fan .card.selected {
-  transform: translateY(calc(-1 * var(--fan-pop))) !important;
+  transform: rotate(var(--fan-angle, 0deg)) translateY(calc(-1 * var(--fan-pop))) !important;
   z-index: 20 !important;
   outline: 3px solid var(--gold);
   box-shadow: 0 14px 28px rgba(0,0,0,.7), 0 0 0 3px var(--gold);
 }
 
-/* Unplayable fan card: muted, no hover */
+/* Unplayable fan card: muted, no hover pop */
 .hand-fan .card.unplayable {
   opacity: .40;
   cursor: not-allowed;
 }
 .hand-fan .card.unplayable:hover {
-  transform: none;
+  transform: rotate(var(--fan-angle, 0deg));
   z-index: auto;
   box-shadow: 0 2px 6px rgba(0,0,0,.5);
 }
@@ -844,15 +852,13 @@ a { color: #7ec88a; }
 /* ── Row 2: Hand fan (full width) ── */
 .hand-zone-wrap {
   width: 100%;
-  align-items: stretch;
 }
-.hand-zone-wrap > .zone-label-small { text-align: center; }
 
 /* ── Row 3: Bottom action bar (always visible) ── */
 #action-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;   /* buttons centred; no name tag here any more */
   gap: .6rem;
   padding: 6px 10px;
   background: rgba(0,0,0,.35);

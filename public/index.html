@@ -164,22 +164,20 @@
         <!-- Row 1 — Tableau: face-up cards lying on top of face-down cards -->
         <div class="human-tableau">
           <div class="human-zone">
-            <div class="zone-label-small">Tableau (face-up over face-down)</div>
+            <div class="zone-label-small" id="human-tableau-label">Player</div>
             <div id="human-stacks" class="stack-row"></div>
           </div>
         </div>
 
-        <!-- Row 2 — hand (fan / overlapping, scrollable) -->
-        <div class="human-zone hand-zone-wrap">
-          <div class="zone-label-small">Hand</div>
+        <!-- Row 2 — hand fan (scrollable, cards rotated into a spread) -->
+        <div class="hand-zone-wrap">
           <div class="hand-fan-scroll">
             <div id="human-hand" class="hand-fan"></div>
           </div>
         </div>
 
-        <!-- Row 3 — name badge + action buttons -->
+        <!-- Row 3 — action buttons (always visible) -->
         <div id="action-bar">
-          <div id="human-name" class="player-name-tag"></div>
           <div class="action-btns">
             <button class="btn btn-primary btn-action-dim" id="btn-play-selected">▶ Play</button>
             <button class="btn btn-danger  btn-action-dim" id="btn-pickup">↑ Pick Up</button>

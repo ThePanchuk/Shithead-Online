@@ -367,7 +367,7 @@ function renderLocalGame() {
   renderPile(LG.pile);
   renderBurnedPile(LG.burnedPile);
 
-  document.getElementById('human-name').textContent = human.name;
+  document.getElementById('human-tableau-label').textContent = human.name;
 
   renderHumanStacks(human.faceDown.length, human.faceUp, {
     isMyTurn, phase: humanPhase, pile: LG.pile, sevenActive: LG.sevenActive,
@@ -377,11 +377,16 @@ function renderLocalGame() {
 
   const handZone = document.getElementById('human-hand');
   handZone.innerHTML = '';
-  human.hand.forEach(card => {
+  const handN = human.hand.length;
+  const fanSpread = Math.min(44, handN * 5);
+  human.hand.forEach((card, i) => {
     const canPlay = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, LG.pile, LG.sevenActive);
     const sel = selectedCards.some(c => c.id === card.id);
     const el = makeCardEl(card, { selected: sel, unplayable: isMyTurn && humanPhase === 'hand' && !canPlay });
     if (isMyTurn && humanPhase === 'hand') el.onclick = () => toggleSelectCard(card, 'hand');
+    const angle = handN > 1 ? ((i / (handN - 1)) - 0.5) * fanSpread : 0;
+    el.style.setProperty('--fan-angle', `${angle.toFixed(1)}deg`);
+    el.style.zIndex = i + 1;
     handZone.appendChild(el);
   });
 
@@ -1003,7 +1008,7 @@ function renderOnlineGame(state) {
   renderPile(state.pile);
   renderBurnedPile(state.burnedPile);
 
-  document.getElementById('human-name').textContent = me.name;
+  document.getElementById('human-tableau-label').textContent = me.name;
 
   renderHumanStacks(state.faceDownCount, me.faceUp, {
     isMyTurn, phase: humanPhase, pile: state.pile, sevenActive: state.sevenActive,
@@ -1013,11 +1018,16 @@ function renderOnlineGame(state) {
 
   const handZone = document.getElementById('human-hand');
   handZone.innerHTML = '';
-  state.hand.forEach(card => {
+  const handN = state.hand.length;
+  const fanSpread = Math.min(44, handN * 5);
+  state.hand.forEach((card, i) => {
     const canPlay = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, state.pile, state.sevenActive);
     const sel = selectedCards.some(c => c.id === card.id);
     const el = makeCardEl(card, { selected: sel, unplayable: isMyTurn && humanPhase === 'hand' && !canPlay });
     if (isMyTurn && humanPhase === 'hand') el.onclick = () => onlineToggleSelect(card);
+    const angle = handN > 1 ? ((i / (handN - 1)) - 0.5) * fanSpread : 0;
+    el.style.setProperty('--fan-angle', `${angle.toFixed(1)}deg`);
+    el.style.zIndex = i + 1;
     handZone.appendChild(el);
   });
 
