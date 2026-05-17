@@ -82,17 +82,17 @@ function flyCardsToPile(cards, rects) {
     el.style.position      = 'fixed';
     el.style.left          = '0';
     el.style.top           = '0';
-    el.style.transform     = `translate(${sx}px,${sy}px)`;
+    el.style.transform     = `translate(${sx}px,${sy}px) scale(0.7)`;
     el.style.transition    = 'none';
     el.style.pointerEvents = 'none';
     el.style.zIndex        = String(1500 + i);
     document.body.appendChild(el);
     // Double-rAF: first paints initial position, second starts the move
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      el.style.transition = 'transform 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.12s 0.3s';
-      el.style.transform  = `translate(${tx - cardW / 2}px,${ty - cardH / 2}px) scale(0.55)`;
+      el.style.transition = 'transform 0.42s cubic-bezier(0.2,0,0.3,1), opacity 0.1s 0.38s';
+      el.style.transform  = `translate(${tx - cardW / 2}px,${ty - cardH / 2}px) scale(1.0)`;
       el.style.opacity    = '0';
-      setTimeout(() => el.remove(), 520);
+      setTimeout(() => el.remove(), 560);
     }));
   });
 }
