@@ -130,9 +130,12 @@ function stageRemove(card) {
   const stage = document.getElementById('card-stage');
   const el = [...stage.querySelectorAll('.card')].find(e => e.dataset.id === card.id);
   if (el) {
-    el.classList.add('stage-removing');
-    // Use timeout instead of animationend — more reliable when hover transforms
-    // or fast clicks interfere with the CSS animation event
+    // Drive the exit with inline styles — they beat CSS class rules and the
+    // hover :hover transform, so the card reliably shrinks and fades out.
+    el.style.transition    = 'transform 0.18s ease-in, opacity 0.18s ease-in';
+    el.style.transform     = 'scale(0.5) translateY(20px)';
+    el.style.opacity       = '0';
+    el.style.pointerEvents = 'none';
     setTimeout(() => el.remove(), 220);
   }
   const idx = selectedCards.findIndex(c => c.id === card.id);
