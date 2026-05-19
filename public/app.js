@@ -39,7 +39,7 @@ let _lastOnlineState = null;
 //   null  → generic (fall back to the 4 original variants)
 function computeBurnContext(playedCards, pileBeforePlay) {
   if (!playedCards || !playedCards.length) return null;
-  if (playedCards[0].rank === '10') return { type: 'ten' };
+  if (playedCards[0].rank === '10') return { type: 'ten', cards: playedCards };
   const rank     = playedCards[0].rank;
   const matching = [...(pileBeforePlay || []).filter(c => c.rank === rank), ...playedCards].slice(-4);
   return { type: 'quad', cards: matching };
@@ -134,7 +134,7 @@ function burnPileAnimation(context) {
   // Ten-specific animations (pick 1 of 3 at random)
   if (context?.type === 'ten') {
     const tenVars = [_burnVariant_ten_stamp, _burnVariant_ten_shockwave, _burnVariant_ten_lightning, _burnVariant_ten_meteor, _burnVariant_ten_neon];
-    return tenVars[Math.floor(Math.random() * tenVars.length)]();
+    return tenVars[Math.floor(Math.random() * tenVars.length)](context.cards || []);
   }
   // Four-of-a-kind animations (pick 1 of 4 at random)
   if (context?.type === 'quad' && context.cards?.length >= 4) {
@@ -571,7 +571,7 @@ function _burnVariant_vortex() {
 }
 
 // ─── Variant 5: Ten stamp (orange inferno + giant "10") ──
-function _burnVariant_ten_stamp() {
+function _burnVariant_ten_stamp(cards = []) {
   return new Promise(resolve => {
     const pileEl = document.getElementById('pile-visual');
     if (!pileEl) { resolve(); return; }
@@ -614,18 +614,27 @@ function _burnVariant_ten_stamp() {
     const imgData = ctx.createImageData(CW, CH);
     const pd = imgData.data;
 
-    // Giant "10" stamp — pops in, holds, then fades upward
+    // Actual card(s) that burned the pile — stamp in, hold, fade upward
+    const _scs = getComputedStyle(document.documentElement);
+    const _scw = parseFloat(_scs.getPropertyValue('--card-w')) || 64;
+    const _sch = parseFloat(_scs.getPropertyValue('--card-h')) || 90;
+    const _sSCALE = Math.min(2.2, (window.innerWidth * 0.78) / Math.max(1, cards.length) / _scw);
+    const _sW = (_scw * _sSCALE) | 0, _sH = (_sch * _sSCALE) | 0;
+    const _sCards = cards.length > 0 ? cards : [{ rank: '10', suit: '♠', id: -1, value: 10 }];
     const tenEl = document.createElement('div');
-    tenEl.textContent = '10';
     tenEl.style.cssText = [
       'position:absolute', `left:${cx}px`, `top:${cy}px`,
       'transform:translate(-50%,-50%) scale(0)',
       'transition:transform 0.18s cubic-bezier(0.1,0,0.1,1.6)',
-      'font-size:min(200px,38vw)', 'font-weight:900',
-      'color:rgba(255,235,70,0.96)',
-      'text-shadow:0 0 35px rgba(255,120,0,1),0 0 70px rgba(255,50,0,0.7)',
-      'font-family:sans-serif', 'letter-spacing:-0.04em', 'line-height:1',
+      'display:flex', 'gap:10px', 'align-items:center',
+      'filter:drop-shadow(0 0 18px rgba(255,120,0,1)) drop-shadow(0 0 40px rgba(255,50,0,0.7))',
     ].join(';');
+    _sCards.forEach(card => {
+      const el = makeCardEl(card);
+      el.style.width = _sW + 'px'; el.style.height = _sH + 'px';
+      el.style.flexShrink = '0'; el.style.pointerEvents = 'none';
+      tenEl.appendChild(el);
+    });
     wrap.appendChild(tenEl);
 
     // CSS flame tongues
@@ -697,7 +706,7 @@ function _burnVariant_ten_stamp() {
 }
 
 // ─── Variant 6: Ten shockwave (golden rings + particles + "10") ──
-function _burnVariant_ten_shockwave() {
+function _burnVariant_ten_shockwave(cards = []) {
   return new Promise(resolve => {
     const pileEl = document.getElementById('pile-visual');
     if (!pileEl) { resolve(); return; }
@@ -725,18 +734,27 @@ function _burnVariant_ten_shockwave() {
     ].join(';');
     wrap.appendChild(flash);
 
-    // "10" text
+    // Actual card(s) that burned the pile
+    const _wcs = getComputedStyle(document.documentElement);
+    const _wcw = parseFloat(_wcs.getPropertyValue('--card-w')) || 64;
+    const _wch = parseFloat(_wcs.getPropertyValue('--card-h')) || 90;
+    const _wSCALE = Math.min(2.0, (window.innerWidth * 0.78) / Math.max(1, cards.length) / _wcw);
+    const _wW = (_wcw * _wSCALE) | 0, _wH = (_wch * _wSCALE) | 0;
+    const _wCards = cards.length > 0 ? cards : [{ rank: '10', suit: '♠', id: -1, value: 10 }];
     const tenEl = document.createElement('div');
-    tenEl.textContent = '10';
     tenEl.style.cssText = [
       'position:absolute', `left:${cx}px`, `top:${cy}px`,
       'transform:translate(-50%,-50%) scale(0)',
       'transition:transform 0.16s cubic-bezier(0.1,0,0.1,1.8)',
-      'font-size:min(170px,33vw)', 'font-weight:900',
-      'color:#fff',
-      'text-shadow:0 0 28px rgba(255,210,50,1),0 0 55px rgba(255,120,0,0.85)',
-      'font-family:sans-serif', 'letter-spacing:-0.04em', 'line-height:1',
+      'display:flex', 'gap:10px', 'align-items:center',
+      'filter:drop-shadow(0 0 16px rgba(255,210,50,1)) drop-shadow(0 0 36px rgba(255,120,0,0.85))',
     ].join(';');
+    _wCards.forEach(card => {
+      const el = makeCardEl(card);
+      el.style.width = _wW + 'px'; el.style.height = _wH + 'px';
+      el.style.flexShrink = '0'; el.style.pointerEvents = 'none';
+      tenEl.appendChild(el);
+    });
     wrap.appendChild(tenEl);
 
     // 3 expanding shockwave rings
@@ -1060,7 +1078,7 @@ function _burnVariant_quad_slam(cards) {
 }
 
 // ─── Variant 9: Ten — Lightning Strike ───────────────────
-function _burnVariant_ten_lightning() {
+function _burnVariant_ten_lightning(cards = []) {
   return new Promise(resolve => {
     const pileEl = document.getElementById('pile-visual');
     if (!pileEl) { resolve(); return; }
@@ -1124,9 +1142,20 @@ function _burnVariant_ten_lightning() {
       sparks.push({ el: sp, ang });
     }
 
+    const _lcs = getComputedStyle(document.documentElement);
+    const _lcw = parseFloat(_lcs.getPropertyValue('--card-w')) || 64;
+    const _lch = parseFloat(_lcs.getPropertyValue('--card-h')) || 90;
+    const _lSCALE = Math.min(1.9, (window.innerWidth * 0.78) / Math.max(1, cards.length) / _lcw);
+    const _lW = (_lcw * _lSCALE) | 0, _lH = (_lch * _lSCALE) | 0;
+    const _lCards = cards.length > 0 ? cards : [{ rank: '10', suit: '♠', id: -1, value: 10 }];
     const tenEl = document.createElement('div');
-    tenEl.textContent = '10';
-    tenEl.style.cssText = ['position:absolute',`left:${cx}px`,`top:${cy-20}px`,'transform:translate(-50%,-50%) scale(0)','font-size:min(160px,30vw)','font-weight:900','color:#cceeff','text-shadow:0 0 20px #88ddff,0 0 50px #4499ff,0 0 80px #2266cc','opacity:0','font-family:sans-serif','line-height:1'].join(';');
+    tenEl.style.cssText = ['position:absolute',`left:${cx}px`,`top:${cy-20}px`,'transform:translate(-50%,-50%) scale(0)','display:flex','gap:10px','align-items:center','filter:drop-shadow(0 0 12px #88ddff) drop-shadow(0 0 28px #4499ff)','opacity:0'].join(';');
+    _lCards.forEach(card => {
+      const el = makeCardEl(card);
+      el.style.width = _lW + 'px'; el.style.height = _lH + 'px';
+      el.style.flexShrink = '0'; el.style.pointerEvents = 'none';
+      tenEl.appendChild(el);
+    });
     wrap.appendChild(tenEl);
 
     let flickerCount = 0;
@@ -1163,7 +1192,7 @@ function _burnVariant_ten_lightning() {
 }
 
 // ─── Variant 10: Ten — Meteor Shower ─────────────────────
-function _burnVariant_ten_meteor() {
+function _burnVariant_ten_meteor(cards = []) {
   return new Promise(resolve => {
     const pileEl = document.getElementById('pile-visual');
     if (!pileEl) { resolve(); return; }
@@ -1172,8 +1201,8 @@ function _burnVariant_ten_meteor() {
     const cx = rect.left + rect.width  / 2;
     const cy = rect.top  + rect.height / 2;
     const DURATION = 2600;
-    const N = 5;
-    const suits = ['♠','♥','♦','♣','♠'];
+    const _mCards = cards.length > 0 ? cards : [{ rank: '10', suit: '♠', id: -1, value: 10 }];
+    const N = _mCards.length;
 
     const cs    = getComputedStyle(document.documentElement);
     const cardW = parseFloat(cs.getPropertyValue('--card-w')) || 72;
@@ -1199,7 +1228,7 @@ function _burnVariant_ten_meteor() {
       const startY   = landY - Math.sin(angle) * travelDist;
       const fallDur  = 420 + Math.random() * 120;
 
-      const card = makeCardEl({ rank: '10', suit: suits[m], id: m, value: 10 });
+      const card = makeCardEl(_mCards[m]);
       card.style.position   = 'absolute';
       card.style.left       = (startX - cardW/2) + 'px';
       card.style.top        = (startY - cardH/2) + 'px';
@@ -1293,7 +1322,7 @@ function _burnVariant_ten_meteor() {
 }
 
 // ─── Variant 11: Ten — Neon Sign Flicker ─────────────────
-function _burnVariant_ten_neon() {
+function _burnVariant_ten_neon(cards = []) {
   return new Promise(resolve => {
     const pileEl = document.getElementById('pile-visual');
     if (!pileEl) { resolve(); return; }
@@ -1312,14 +1341,25 @@ function _burnVariant_ten_neon() {
     panel.style.cssText = ['position:absolute',`left:${cx-PW/2}px`,`top:${cy-PH/2-20}px`,`width:${PW}px`,`height:${PH}px`,'border-radius:12px','background:rgba(10,0,30,.85)','border:2px solid rgba(180,0,255,.4)','box-shadow:0 0 18px rgba(180,0,255,.3)','display:flex','align-items:center','justify-content:center','transform:scale(0)','transition:transform .25s cubic-bezier(.17,.89,.32,1.28)'].join(';');
     wrap.appendChild(panel);
 
+    const _nCards = cards.length > 0 ? cards : [{ rank: '10', suit: '♠', id: -1, value: 10 }];
+    const _nLabel = _nCards.map(c => c.rank + c.suit).join('  ');
+    const _nRed   = _nCards[0].suit === '♥' || _nCards[0].suit === '♦';
+    const _nColor = _nRed ? '#ff3355' : '#aa44ff';
+    const _nGlow  = _nRed
+      ? '0 0 8px #ff3355,0 0 20px #ff3355,0 0 40px #cc0033,0 0 80px #880022'
+      : '0 0 8px #aa44ff,0 0 20px #aa44ff,0 0 40px #8800cc,0 0 80px #550088';
+    const _nFontSize = Math.max(22, Math.floor(56 / _nCards.length)) + 'px';
+    // Widen panel to fit multiple cards
+    panel.style.width  = Math.max(PW, _nCards.length * 88) + 'px';
+    panel.style.height = PH + 'px';
     const neonText = document.createElement('div');
-    neonText.textContent = '10';
-    neonText.style.cssText = 'font-size:60px;font-weight:900;color:#ff44ff;letter-spacing:4px;transition:color .05s,text-shadow .05s;font-family:sans-serif;line-height:1';
+    neonText.textContent = _nLabel;
+    neonText.style.cssText = `font-size:${_nFontSize};font-weight:900;color:${_nColor};letter-spacing:3px;transition:color .05s,text-shadow .05s;font-family:sans-serif;line-height:1;white-space:nowrap`;
     panel.appendChild(neonText);
 
     const setNeon = on => {
-      neonText.style.color      = on ? '#ff44ff' : '#440033';
-      neonText.style.textShadow = on ? '0 0 8px #ff44ff,0 0 20px #ff44ff,0 0 40px #cc00ff,0 0 80px #8800cc' : 'none';
+      neonText.style.color      = on ? _nColor : '#330022';
+      neonText.style.textShadow = on ? _nGlow : 'none';
       panel.style.boxShadow     = on ? '0 0 18px rgba(180,0,255,.3),0 0 40px rgba(255,0,255,.25)' : 'none';
     };
 
@@ -1338,7 +1378,9 @@ function _burnVariant_ten_neon() {
 
     setTimeout(() => {
       neonText.style.color      = '#fff';
-      neonText.style.textShadow = '0 0 10px #fff,0 0 30px #ff88ff,0 0 60px #ff00ff,0 0 120px #cc00ff';
+      neonText.style.textShadow = _nRed
+        ? '0 0 10px #fff,0 0 30px #ff8899,0 0 60px #ff2244,0 0 120px #cc0033'
+        : '0 0 10px #fff,0 0 30px #cc88ff,0 0 60px #aa00ff,0 0 120px #8800cc';
       panel.style.boxShadow     = '0 0 40px rgba(255,100,255,.8),0 0 80px rgba(255,0,255,.5)';
       sparks.forEach((s, i) => {
         s.el.style.opacity = '1';
