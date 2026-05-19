@@ -1995,6 +1995,7 @@ function renderHumanStacks(faceDownLen, faceUp, opt) {
   const zone = document.getElementById('human-stacks');
   if (!zone) return;
   zone.innerHTML = '';
+  zone.classList.toggle('tableau-enlarged', opt.phase === 'faceUp' || opt.phase === 'faceDown');
   const num = Math.max(faceDownLen, faceUp.length);
   for (let i = 0; i < num; i++) {
     const stack = document.createElement('div');
@@ -2311,6 +2312,8 @@ function renderLocalGame() {
   const human      = LG.players[0];
   const isMyTurn   = LG.currentPlayer === 0 && !human.finished;
   const humanPhase = localPlayerPhase(human);
+  document.getElementById('human-area').classList.toggle(
+    'no-hand', humanPhase === 'faceUp' || humanPhase === 'faceDown');
 
   document.getElementById('game-status-bar').textContent = (() => {
     if (LG.phase === 'ended') return 'Game Over';
@@ -3197,6 +3200,8 @@ function renderOnlineGame(state) {
     (state.hand.length > 0      ? 'hand'     :
      (me.faceUp.length > 0      ? 'faceUp'   :
       (state.faceDownCount > 0  ? 'faceDown' : 'done')));
+  document.getElementById('human-area').classList.toggle(
+    'no-hand', humanPhase === 'faceUp' || humanPhase === 'faceDown');
 
   // Status bar: hide current-turn info in Classic Mode
   document.getElementById('game-status-bar').textContent = (() => {

@@ -859,6 +859,28 @@ a { color: #7ec88a; }
   .stack-row { gap: 6px; }
 }
 
+/* ── Enlarged tableau: faceUp / faceDown phase ──
+   When the player has no hand cards, their tableau cards grow to match
+   the hand-card size so they fill the same visual space. */
+#human-stacks.tableau-enlarged {
+  min-height: calc(var(--hand-card-h) + var(--stack-shift) + 4px);
+}
+#human-stacks.tableau-enlarged .card-stack {
+  width:  var(--hand-card-w);
+  height: calc(var(--hand-card-h) + var(--stack-shift));
+}
+#human-stacks.tableau-enlarged .card-stack > .card {
+  width:  var(--hand-card-w);
+  height: var(--hand-card-h);
+}
+/* With no hand, hide the empty fan zone and restore the action-bar margin */
+#human-area.no-hand .hand-zone-wrap {
+  display: none;
+}
+#human-area.no-hand #action-bar {
+  margin-top: 8px;
+}
+
 /* ── Row 2: Hand fan (full width) ── */
 .hand-zone-wrap {
   width: 100%;
