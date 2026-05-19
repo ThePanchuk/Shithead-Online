@@ -1972,14 +1972,16 @@ function renderHumanStacks(faceDownLen, faceUp, opt) {
       // alwaysAct (Classic Mode): skip isCardPlayable check so any card is selectable
       const canPlay = (opt.isMyTurn || opt.alwaysAct) && opt.phase === 'faceUp' &&
                       (opt.alwaysAct || isCardPlayable(card, opt.pile, opt.sevenActive));
+      // forcedFaceUpPickup: player must choose a face-up card to take with the pile
+      const canSelect = canPlay || (opt.forcedFaceUpPickup && opt.isMyTurn && opt.phase === 'faceUp');
       const sel = selectedCards.some(c => c.id === card.id);
       const fuEl = makeCardEl(card, {
         selected: sel,
-        // No unplayable dim in Classic Mode
-        unplayable: !opt.alwaysAct && opt.isMyTurn && opt.phase === 'faceUp' && !canPlay
+        // No unplayable dim in Classic Mode or forced-pickup mode
+        unplayable: !opt.alwaysAct && !opt.forcedFaceUpPickup && opt.isMyTurn && opt.phase === 'faceUp' && !canPlay
       });
       fuEl.classList.add('stack-faceup');
-      if (canPlay && opt.onFaceUpClick) fuEl.onclick = () => opt.onFaceUpClick(card);
+      if (canSelect && opt.onFaceUpClick) fuEl.onclick = () => opt.onFaceUpClick(card);
       stack.appendChild(fuEl);
     }
     zone.appendChild(stack);
@@ -2164,8 +2166,13 @@ function localApplyPlay(playerIdx, cards) {
   return res;
 }
 
-function localPickup(playerIdx) {
+function localPickup(playerIdx, extraFaceUpCards = []) {
   const p = LG.players[playerIdx];
+  if (extraFaceUpCards.length > 0) {
+    const extraIds = new Set(extraFaceUpCards.map(c => c.id));
+    p.faceUp = p.faceUp.filter(c => !extraIds.has(c.id));
+    p.hand.push(...extraFaceUpCards);
+  }
   p.hand.push(...LG.pile);
   LG.pile = [];
   LG.sevenActive = false;
@@ -2185,7 +2192,13 @@ async function botTakeTurn(botIdx) {
   }
 
   if (!decision || decision.action === 'pickup') {
-    localPickup(botIdx);
+    // In faceUp phase: bot must also take a face-up card with the pile
+    let extraFaceUpCards = [];
+    if (localPlayerPhase(p) === 'faceUp' && p.faceUp.length > 0 && LG.pile.length > 0) {
+      const sorted = [...p.faceUp].sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
+      extraFaceUpCards = [sorted[0]];
+    }
+    localPickup(botIdx, extraFaceUpCards);
     localAdvanceTurn(botIdx);
     afterBotAction();
     return;
@@ -2274,8 +2287,12 @@ function renderLocalGame() {
 
   document.getElementById('human-tableau-label').textContent = human.name;
 
+  const forcedFaceUpPickup = isMyTurn && humanPhase === 'faceUp' && LG.pile.length > 0 &&
+    !human.faceUp.some(c => isCardPlayable(c, LG.pile, LG.sevenActive));
+
   renderHumanStacks(human.faceDown.length, human.faceUp, {
     isMyTurn, phase: humanPhase, pile: LG.pile, sevenActive: LG.sevenActive,
+    forcedFaceUpPickup,
     onFaceDownClick: (i, el) => humanPlayFaceDown(i, el),
     onFaceUpClick:   card => toggleSelectCard(card, 'faceUp')
   });
@@ -2303,8 +2320,9 @@ function renderLocalGame() {
   const btnPlay   = document.getElementById('btn-play-selected');
   const btnPickup = document.getElementById('btn-pickup');
   const canAct = isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp');
-  btnPlay.classList.toggle('btn-action-dim', !canAct || selectedCards.length === 0);
-  btnPickup.classList.toggle('btn-action-dim', !canAct || LG.pile.length === 0);
+  btnPlay.classList.toggle('btn-action-dim', !canAct || selectedCards.length === 0 || forcedFaceUpPickup);
+  btnPickup.classList.toggle('btn-action-dim',
+    !canAct || LG.pile.length === 0 || (forcedFaceUpPickup && selectedCards.length === 0));
 
   renderOpponents(LG.players, LG.currentPlayer, false);
 }
@@ -2945,7 +2963,7 @@ async function fbPlayCards(cards) {
   stageClear();
 }
 
-async function fbPickup() {
+async function fbPickup(extraFaceUpCardIds = []) {
   try {
     await window.db.runTransaction(async t => {
       const snap = await t.get(roomRef(currentRoomCode));
@@ -2953,8 +2971,18 @@ async function fbPickup() {
       const isClassic = s.gameMode === 'classic';
       // Pathetic Mode: only pick up on your turn; Classic Mode: always allowed
       if (!isClassic && s.currentPlayerIndex !== myOnlineIndex) return;
-      const players = s.players.map(p => ({ ...p, hand: [...p.hand] }));
-      players[myOnlineIndex].hand = [...players[myOnlineIndex].hand, ...(s.pile || [])];
+      const players = s.players.map(p => ({
+        ...p, hand: [...p.hand], faceUp: [...(p.faceUp || [])]
+      }));
+      const me = players[myOnlineIndex];
+      // If picking up from faceUp phase: also take the selected face-up cards
+      if (extraFaceUpCardIds.length > 0) {
+        const idSet = new Set(extraFaceUpCardIds);
+        const takenFaceUp = me.faceUp.filter(c => idSet.has(c.id));
+        me.faceUp = me.faceUp.filter(c => !idSet.has(c.id));
+        me.hand = [...me.hand, ...takenFaceUp];
+      }
+      me.hand = [...me.hand, ...(s.pile || [])];
       // Turn always advances to next after the player who picked up
       const idx = advanceTurnBy(players, myOnlineIndex, 1, s.direction || 1);
       t.update(roomRef(currentRoomCode), {
@@ -3152,11 +3180,18 @@ function renderOnlineGame(state) {
 
   // In Classic Mode every card in the correct phase is always interactive
   const classicCanAct = isClassic && !me.finished;
+  const forcedFaceUpPickup = !isClassic && isMyTurn && humanPhase === 'faceUp' &&
+    (state.pile || []).length > 0 &&
+    !me.faceUp.some(c => isCardPlayable(c, state.pile, state.sevenActive));
+
   renderHumanStacks(state.faceDownCount, me.faceUp, {
     isMyTurn, alwaysAct: classicCanAct,
     phase: humanPhase, pile: state.pile, sevenActive: state.sevenActive,
+    forcedFaceUpPickup,
     onFaceDownClick: (i, el) => fbPlayFaceDown(i, el),
-    onFaceUpClick:   card => onlineToggleSelect(card)
+    onFaceUpClick:   card => forcedFaceUpPickup
+      ? onlineForcedFaceUpSelect(card)
+      : onlineToggleSelect(card)
   });
 
   const handZone = document.getElementById('human-hand');
@@ -3188,8 +3223,9 @@ function renderOnlineGame(state) {
   const canAct = isClassic
     ? (!me.finished && (humanPhase === 'hand' || humanPhase === 'faceUp'))
     : (isMyTurn && (humanPhase === 'hand' || humanPhase === 'faceUp'));
-  document.getElementById('btn-play-selected').classList.toggle('btn-action-dim', !canAct || selectedCards.length === 0);
-  document.getElementById('btn-pickup').classList.toggle('btn-action-dim', !canAct || state.pile.length === 0);
+  document.getElementById('btn-play-selected').classList.toggle('btn-action-dim', !canAct || selectedCards.length === 0 || forcedFaceUpPickup);
+  document.getElementById('btn-pickup').classList.toggle('btn-action-dim',
+    !canAct || (state.pile || []).length === 0 || (forcedFaceUpPickup && selectedCards.length === 0));
 
   const oArea = document.getElementById('opponents-area');
   oArea.innerHTML = '';
@@ -3206,6 +3242,18 @@ function onlineToggleSelect(card) {
     if (selectedCards.length > 0 && selectedCards[0].rank !== card.rank) stageClear();
     stageAdd(card);
   }
+}
+
+// In-place face-up card selection for forced faceUp pickup (no stage animation).
+function onlineForcedFaceUpSelect(card) {
+  const idx = selectedCards.findIndex(c => c.id === card.id);
+  if (idx >= 0) {
+    selectedCards.splice(idx, 1);
+  } else {
+    if (selectedCards.length > 0 && selectedCards[0].rank !== card.rank) stageClear();
+    selectedCards.push(card);
+  }
+  if (_lastOnlineState) renderOnlineGame(_lastOnlineState);
 }
 
 // ─── Hand sort toggle ──────────────────────────────────
@@ -3252,12 +3300,17 @@ document.getElementById('btn-play-selected').onclick = async function () {
 
 document.getElementById('btn-pickup').onclick = function () {
   if (mode === 'online') {
+    // Pass selected face-up card IDs so fbPickup can take them with the pile
+    const extraFaceUpCardIds = selectedCards.map(c => c.id);
     stageClear();
-    fbPickup();
+    fbPickup(extraFaceUpCardIds);
   } else {
     if (!LG) return;
+    // Capture selected face-up cards before clearing (forced faceUp pickup)
+    const extraFaceUpCards = localPlayerPhase(LG.players[0]) === 'faceUp'
+      ? [...selectedCards] : [];
     stageClear();
-    localPickup(0);
+    localPickup(0, extraFaceUpCards);
     localAdvanceTurn(0);
     localCheckGameOver();
     renderLocalGame();
