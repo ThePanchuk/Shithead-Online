@@ -53,6 +53,9 @@ let _prevMistakeSeq   = -1;   // last seen mistake seq; -1 = not yet in play pha
 let _mistakeAnimating = false; // blocks renderOnlineGame during animation
 let _playPhaseShown   = false; // true once we've initialised _prevMistakeSeq for this game
 
+// Pickup animation tracking
+let _prevPickupSeq    = -1;   // last seen pickup seq; -1 = not yet in play phase
+
 // Face-down flip animation (online) — blocks renderOnlineGame while the reveal plays
 let _fdFlipAnimating = false;
 
@@ -1822,6 +1825,90 @@ function mistakeAnimation(playerName) {
   });
 }
 
+// ─── Pickup animation ──────────────────────────────────
+// Non-blocking. Shows a label near the pile + a few card-back silhouettes
+// flying toward the picking player's end of the table.
+// towardsHuman: true  → cards fly downward  (human area)
+//               false → cards fly upward    (opponents area)
+function pickupAnimation(playerName, pileCount, towardsHuman) {
+  const pileEl = document.getElementById('pile-visual');
+  const gameEl = document.getElementById('screen-game');
+  if (!pileEl || !gameEl) return;
+
+  const pileRect = pileEl.getBoundingClientRect();
+  const gameRect = gameEl.getBoundingClientRect();
+  const cx = (pileRect.left + pileRect.width  / 2) - gameRect.left;
+  const cy = (pileRect.top  + pileRect.height / 2) - gameRect.top;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:900;overflow:hidden';
+  gameEl.appendChild(wrap);
+
+  // Banner label
+  const n = pileCount === 1 ? '1 card' : `${pileCount} cards`;
+  const banner = document.createElement('div');
+  banner.textContent = `${playerName} picks up (${n})`;
+  banner.style.cssText = [
+    'position:absolute',
+    `left:${cx}px`, `top:${cy - 52}px`,
+    'transform:translate(-50%,-50%)',
+    'background:rgba(20,10,5,0.82)',
+    'color:#f0d090',
+    'padding:5px 14px',
+    'border-radius:20px',
+    'font-size:clamp(12px,2.8vw,16px)',
+    'font-weight:700',
+    'white-space:nowrap',
+    'letter-spacing:.04em',
+    'opacity:0',
+    'transition:opacity 0.18s ease-out',
+  ].join(';');
+  wrap.appendChild(banner);
+
+  // Flying card backs
+  const cs = getComputedStyle(document.documentElement);
+  const cw = parseFloat(cs.getPropertyValue('--card-sm-w')) || 38;
+  const ch = parseFloat(cs.getPropertyValue('--card-sm-h')) || 54;
+  const N  = Math.min(pileCount, 4);
+  const dy = towardsHuman ? 120 : -120;
+  const flyCards = [];
+
+  for (let i = 0; i < N; i++) {
+    const c = makeBackEl({ small: true });
+    const ox = (i - (N - 1) / 2) * 13;
+    c.style.cssText = [
+      'position:absolute',
+      `left:${cx + ox}px`, `top:${cy}px`,
+      `width:${cw}px`, `height:${ch}px`,
+      'transform:translate(-50%,-50%)',
+      'opacity:0',
+    ].join(';');
+    wrap.appendChild(c);
+    flyCards.push({ el: c, ox, i });
+  }
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    banner.style.opacity = '1';
+    flyCards.forEach(({ el, ox, i }) => {
+      const delay = i * 50;
+      el.style.transition = `transform 0.5s ease-in ${delay}ms, opacity 0.15s ease-out ${delay}ms`;
+      el.style.opacity    = '0.88';
+      const rot = (i - (N - 1) / 2) * 20;
+      el.style.transform  = `translate(calc(-50% + ${ox * 0.3}px), calc(-50% + ${dy}px)) rotate(${rot}deg)`;
+    });
+  }));
+
+  setTimeout(() => {
+    banner.style.transition = 'opacity 0.28s ease-out';
+    banner.style.opacity    = '0';
+    flyCards.forEach(({ el }) => {
+      el.style.transition = 'opacity 0.25s ease-out';
+      el.style.opacity    = '0';
+    });
+    setTimeout(() => wrap.remove(), 290);
+  }, 1100);
+}
+
 // ═══════════════════════════════════════════════════════
 //  Classic Mode — manual deck draw
 // ═══════════════════════════════════════════════════════
@@ -2241,6 +2328,9 @@ async function botTakeTurn(botIdx) {
       const sorted = [...p.faceUp].sort((a, b) => RANK_VALUES[a.rank] - RANK_VALUES[b.rank]);
       extraFaceUpCards = [sorted[0]];
     }
+    if (LG.pile.length > 0) {
+      pickupAnimation((p.name || 'Bot'), LG.pile.length, false);
+    }
     localPickup(botIdx, extraFaceUpCards);
     localAdvanceTurn(botIdx);
     afterBotAction();
@@ -2657,6 +2747,7 @@ function stopRoom() {
   _deckDragCleanup();
   _prevOnlineBurnCount = -1;
   _prevMistakeSeq   = -1;
+  _prevPickupSeq    = -1;
   _mistakeAnimating = false;
   _playPhaseShown   = false;
   _fdFlipAnimating  = false;
@@ -2790,8 +2881,9 @@ function onRoomUpdate(s) {
     // First time in play phase: initialise the mistake sequence baseline
     // so we don't replay old mistakes when entering or re-joining.
     if (!_playPhaseShown) {
-      _playPhaseShown = true;
-      _prevMistakeSeq = s.mistake?.seq ?? -1;
+      _playPhaseShown  = true;
+      _prevMistakeSeq  = s.mistake?.seq   ?? -1;
+      _prevPickupSeq   = s.lastPickup?.seq ?? -1;
     }
 
     // Classic Mode: detect a new mistake and show the MISTAKE overlay
@@ -2808,6 +2900,17 @@ function onRoomUpdate(s) {
     }
 
     renderOnlineGame(OG);
+
+    // Pickup animation — fire-and-forget, non-blocking
+    const newPickupSeq = s.lastPickup?.seq ?? -1;
+    if (newPickupSeq > _prevPickupSeq) {
+      _prevPickupSeq = newPickupSeq;
+      const pIdx         = s.lastPickup.playerIdx;
+      const pickedUpName = (s.players[pIdx] || {}).name || 'Someone';
+      const isMe         = pIdx === myOnlineIndex;
+      pickupAnimation(isMe ? 'You' : pickedUpName, s.lastPickup.pileCount, isMe);
+    }
+
     if (s.phase === 'ended') setTimeout(showGameOver, 800);
   }
 }
@@ -2825,7 +2928,7 @@ async function startOnlineGame() {
       phase: 'swap', deck: dealt.remainingDeck,
       gameMode: d.gameMode || 'pathetic',
       pile: [], burnedPile: [], sevenActive: false, direction: 1, finishCounter: 1, loserIndex: null,
-      mistake: null, lastPlayerIdx: null, burnCause: null,
+      mistake: null, lastPlayerIdx: null, burnCause: null, lastPickup: null,
       lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
       players: d.players.map((p, i) => ({
         ...p, swapReady: false, finished: false, finishOrder: null,
@@ -3033,6 +3136,7 @@ async function fbPickup(extraFaceUpCardIds = []) {
       t.update(roomRef(currentRoomCode), {
         players, pile: [], sevenActive: false, currentPlayerIndex: idx,
         ...(isClassic ? { lastPlayerIdx: null } : {}),
+        lastPickup: { playerIdx: myOnlineIndex, pileCount: (s.pile || []).length, seq: (s.lastPickup?.seq ?? -1) + 1 },
         lastActivity: firebase.firestore.FieldValue.serverTimestamp()
       });
     });
@@ -3356,7 +3460,9 @@ document.getElementById('btn-pickup').onclick = function () {
     // Capture selected face-up cards before clearing (forced faceUp pickup)
     const extraFaceUpCards = localPlayerPhase(LG.players[0]) === 'faceUp'
       ? [...selectedCards] : [];
+    const localPileCount = LG.pile.length;
     stageClear();
+    if (localPileCount > 0) pickupAnimation(LG.players[0].name || 'You', localPileCount, true);
     localPickup(0, extraFaceUpCards);
     localAdvanceTurn(0);
     localCheckGameOver();
