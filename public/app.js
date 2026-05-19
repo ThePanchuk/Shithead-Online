@@ -131,20 +131,22 @@ function flyCardsToPile(cards, rects) {
 //  Pile-burn animations  — 4 variants, one chosen at random
 // ═══════════════════════════════════════════════════════
 function burnPileAnimation(context) {
-  // Ten-specific animations
+  // Ten-specific animations (pick 1 of 3 at random)
   if (context?.type === 'ten') {
-    return (Math.random() < 0.5 ? _burnVariant_ten_stamp : _burnVariant_ten_shockwave)();
+    const tenVars = [_burnVariant_ten_stamp, _burnVariant_ten_shockwave, _burnVariant_ten_lightning, _burnVariant_ten_meteor, _burnVariant_ten_neon];
+    return tenVars[Math.floor(Math.random() * tenVars.length)]();
   }
-  // Four-of-a-kind animations (need the 4 cards)
+  // Four-of-a-kind animations (pick 1 of 4 at random)
   if (context?.type === 'quad' && context.cards?.length >= 4) {
-    return (Math.random() < 0.5 ? _burnVariant_quad_burn : _burnVariant_quad_slam)(context.cards);
+    const quadVars = [_burnVariant_quad_burn, _burnVariant_quad_slam, _burnVariant_quad_domino, _burnVariant_quad_tetris, _burnVariant_quad_fan];
+    return quadVars[Math.floor(Math.random() * quadVars.length)](context.cards);
   }
-  // Generic — original 4 variants
+  // Generic — 4 variants
   const variants = [
-    _burnVariant_inferno,    // orange Doom fire
-    _burnVariant_arcane,     // blue-purple arcane flame
-    _burnVariant_explosion,  // shockwave + particle burst
-    _burnVariant_vortex,     // dark spiral implosion
+    _burnVariant_inferno,
+    _burnVariant_arcane,
+    _burnVariant_explosion,
+    _burnVariant_vortex,
   ];
   return variants[Math.floor(Math.random() * variants.length)]();
 }
@@ -208,7 +210,7 @@ function _burnVariant_inferno() {
       const fl = document.createElement('div');
       const w  = (14 + Math.random() * 26) | 0;
       const h  = (w  * (1.5 + Math.random())) | 0;
-      const x  = (FW * 0.05 + Math.random() * FW * 0.9 - w / 2) | 0;
+      const x  = (FW * 0.20 + Math.random() * FW * 0.60 - w / 2) | 0;
       const dur = (0.42 + Math.random() * 0.44).toFixed(2);
       const del = (Math.random() * 0.55).toFixed(2);
       fl.style.cssText = [
@@ -230,8 +232,12 @@ function _burnVariant_inferno() {
       const maxHeat  = progress < 0.65
         ? 220 + ((Math.random() * 35) | 0)
         : Math.max(0, ((1 - (progress - 0.65) / 0.35) * 245) | 0);
-      for (let x = 0; x < CW; x++)
-        buf[(CH-1)*CW+x] = maxHeat > 8 ? Math.max(0, maxHeat - ((Math.random()*45)|0)) : 0;
+      for (let x = 0; x < CW; x++) {
+        if (maxHeat <= 8) { buf[(CH-1)*CW+x] = 0; continue; }
+        const _nx   = (x / Math.max(1, CW - 1) - 0.5) * 2;
+        const _bell = Math.max(0, 1 - _nx * _nx * 2.0);
+        buf[(CH-1)*CW+x] = Math.max(0, (maxHeat * (0.12 + 0.88 * _bell) - (Math.random() * 42)) | 0);
+      }
       for (let y = 0; y < CH - 1; y++) {
         for (let x = 0; x < CW; x++) {
           const drift = (Math.random() * 3) | 0;
@@ -317,7 +323,7 @@ function _burnVariant_arcane() {
       const fl = document.createElement('div');
       const w  = (12 + Math.random() * 28) | 0;
       const h  = (w  * (1.6 + Math.random())) | 0;
-      const x  = (FW * 0.05 + Math.random() * FW * 0.9 - w / 2) | 0;
+      const x  = (FW * 0.20 + Math.random() * FW * 0.60 - w / 2) | 0;
       const dur = (0.38 + Math.random() * 0.48).toFixed(2);
       const del = (Math.random() * 0.60).toFixed(2);
       fl.style.cssText = [
@@ -339,8 +345,12 @@ function _burnVariant_arcane() {
       const maxHeat  = progress < 0.60
         ? 230 + ((Math.random() * 25) | 0)
         : Math.max(0, ((1 - (progress - 0.60) / 0.40) * 255) | 0);
-      for (let x = 0; x < CW; x++)
-        buf[(CH-1)*CW+x] = maxHeat > 8 ? Math.max(0, maxHeat - ((Math.random()*40)|0)) : 0;
+      for (let x = 0; x < CW; x++) {
+        if (maxHeat <= 8) { buf[(CH-1)*CW+x] = 0; continue; }
+        const _nx   = (x / Math.max(1, CW - 1) - 0.5) * 2;
+        const _bell = Math.max(0, 1 - _nx * _nx * 2.0);
+        buf[(CH-1)*CW+x] = Math.max(0, (maxHeat * (0.12 + 0.88 * _bell) - (Math.random() * 38)) | 0);
+      }
       // Wilder drift (0-3) for the chaotic arcane feel
       for (let y = 0; y < CH - 1; y++) {
         for (let x = 0; x < CW; x++) {
@@ -623,7 +633,7 @@ function _burnVariant_ten_stamp() {
       const fl = document.createElement('div');
       const w  = (14 + Math.random() * 28) | 0;
       const h  = (w  * (1.5 + Math.random())) | 0;
-      const x  = (FW * 0.05 + Math.random() * FW * 0.9 - w / 2) | 0;
+      const x  = (FW * 0.20 + Math.random() * FW * 0.60 - w / 2) | 0;
       const dur = (0.42 + Math.random() * 0.44).toFixed(2);
       const del = (Math.random() * 0.55).toFixed(2);
       fl.style.cssText = [
@@ -656,8 +666,12 @@ function _burnVariant_ten_stamp() {
       const maxHeat  = progress < 0.65
         ? 220 + ((Math.random() * 35) | 0)
         : Math.max(0, ((1 - (progress - 0.65) / 0.35) * 245) | 0);
-      for (let x = 0; x < CW; x++)
-        buf[(CH-1)*CW+x] = maxHeat > 8 ? Math.max(0, maxHeat - ((Math.random()*45)|0)) : 0;
+      for (let x = 0; x < CW; x++) {
+        if (maxHeat <= 8) { buf[(CH-1)*CW+x] = 0; continue; }
+        const _nx   = (x / Math.max(1, CW - 1) - 0.5) * 2;
+        const _bell = Math.max(0, 1 - _nx * _nx * 2.0);
+        buf[(CH-1)*CW+x] = Math.max(0, (maxHeat * (0.12 + 0.88 * _bell) - (Math.random() * 42)) | 0);
+      }
       for (let y = 0; y < CH - 1; y++) {
         for (let x = 0; x < CW; x++) {
           const drift = (Math.random() * 3) | 0;
@@ -884,8 +898,12 @@ function _burnVariant_quad_burn(cards) {
       const maxHeat = fp < 0.65
         ? 215 + ((Math.random() * 40) | 0)
         : Math.max(0, ((1 - (fp - 0.65) / 0.35) * 245) | 0);
-      for (let x = 0; x < CW; x++)
-        buf[(CH-1)*CW+x] = maxHeat > 8 ? Math.max(0, maxHeat - ((Math.random()*45)|0)) : 0;
+      for (let x = 0; x < CW; x++) {
+        if (maxHeat <= 8) { buf[(CH-1)*CW+x] = 0; continue; }
+        const _nx   = (x / Math.max(1, CW - 1) - 0.5) * 2;
+        const _bell = Math.max(0, 1 - _nx * _nx * 2.0);
+        buf[(CH-1)*CW+x] = Math.max(0, (maxHeat * (0.12 + 0.88 * _bell) - (Math.random() * 42)) | 0);
+      }
       for (let y = 0; y < CH - 1; y++) {
         for (let x = 0; x < CW; x++) {
           const drift = (Math.random() * 3) | 0;
@@ -1038,6 +1056,592 @@ function _burnVariant_quad_slam(cards) {
       wrap.style.opacity    = '0';
       setTimeout(() => { wrap.remove(); resolve(); }, 320);
     }, DURATION - 320);
+  });
+}
+
+// ─── Variant 9: Ten — Lightning Strike ───────────────────
+function _burnVariant_ten_lightning() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
+    const DURATION = 2200;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    // Jagged SVG bolt from top to pile
+    const startX = cx + (Math.random() - 0.5) * 60;
+    const steps = 10;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = startX + (cx - startX) * t + (i > 0 && i < steps ? (Math.random() - 0.5) * 80 : 0);
+      pts.push([x, (cy) * t]);
+    }
+    const pathD = 'M ' + pts.map(p => p.join(',')).join(' L ');
+    const bp    = pts[Math.floor(steps * 0.55)];
+    const b1x   = bp[0] + 60 + Math.random() * 60, b1y = bp[1] + 60 + Math.random() * 60;
+    const b2x   = bp[0] - 50 - Math.random() * 70,  b2y = bp[1] + 50 + Math.random() * 50;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', window.innerWidth); svg.setAttribute('height', window.innerHeight);
+    svg.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none';
+    const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+    defs.innerHTML = '<filter id="lglow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+    svg.appendChild(defs);
+    const mkBolt = (d,w,op) => {
+      const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d',d); p.setAttribute('stroke','#aaeeff'); p.setAttribute('stroke-width',w);
+      p.setAttribute('fill','none'); p.setAttribute('opacity',op); p.setAttribute('filter','url(#lglow)');
+      return p;
+    };
+    const mainBolt = mkBolt(pathD,3,0), glow1 = mkBolt(pathD,10,0);
+    const br1 = mkBolt(`M ${bp[0]},${bp[1]} L ${b1x},${b1y}`,1.5,0);
+    const br2 = mkBolt(`M ${bp[0]},${bp[1]} L ${b2x},${b2y}`,1.5,0);
+    [glow1,mainBolt,br1,br2].forEach(e => svg.appendChild(e));
+    wrap.appendChild(svg);
+
+    const flash = document.createElement('div');
+    flash.style.cssText = 'position:absolute;inset:0;background:rgba(180,230,255,.6);opacity:0;transition:opacity .05s';
+    wrap.appendChild(flash);
+
+    const IR = 70;
+    const impGlow = document.createElement('div');
+    impGlow.style.cssText = ['position:absolute',`left:${cx-IR}px`,`top:${cy-IR}px`,`width:${IR*2}px`,`height:${IR*2}px`,'border-radius:50%','background:radial-gradient(circle,rgba(200,240,255,1) 0%,rgba(80,160,255,.6) 40%,transparent 75%)','transform:scale(0)','opacity:0'].join(';');
+    wrap.appendChild(impGlow);
+
+    const sparks = [];
+    for (let i = 0; i < 16; i++) {
+      const sp = document.createElement('div');
+      const ang = (i / 16) * Math.PI * 2, len = 25 + Math.random() * 45;
+      sp.style.cssText = ['position:absolute',`left:${cx}px`,`top:${cy}px`,'width:2px',`height:${len}px`,'background:linear-gradient(to bottom,#fff,rgba(100,200,255,0))','transform-origin:0 0',`transform:rotate(${ang}rad) scale(0)`,'border-radius:2px','opacity:0'].join(';');
+      wrap.appendChild(sp);
+      sparks.push({ el: sp, ang });
+    }
+
+    const tenEl = document.createElement('div');
+    tenEl.textContent = '10';
+    tenEl.style.cssText = ['position:absolute',`left:${cx}px`,`top:${cy-20}px`,'transform:translate(-50%,-50%) scale(0)','font-size:min(160px,30vw)','font-weight:900','color:#cceeff','text-shadow:0 0 20px #88ddff,0 0 50px #4499ff,0 0 80px #2266cc','opacity:0','font-family:sans-serif','line-height:1'].join(';');
+    wrap.appendChild(tenEl);
+
+    let flickerCount = 0;
+    function flicker() {
+      const on = flickerCount % 2 === 0;
+      [mainBolt,glow1,br1,br2].forEach(e => e.setAttribute('opacity', on ? (1 - flickerCount * 0.05).toFixed(2) : 0));
+      flickerCount++;
+      if (flickerCount < 6) setTimeout(flicker, on ? 60 : 40);
+    }
+    flicker();
+
+    setTimeout(() => {
+      flash.style.opacity = '1';
+      setTimeout(() => { flash.style.transition = 'opacity .3s'; flash.style.opacity = '0'; }, 60);
+      impGlow.style.transition = 'transform .2s ease-out, opacity .3s ease-out .15s';
+      impGlow.style.transform  = 'scale(1)'; impGlow.style.opacity = '1';
+      setTimeout(() => { impGlow.style.opacity = '0'; }, 300);
+      sparks.forEach((s, i) => {
+        s.el.style.opacity = '1';
+        s.el.style.transition = `transform .35s ease-out ${i*8}ms, opacity .35s ease-out ${i*8}ms`;
+        s.el.style.transform  = `rotate(${s.ang}rad) scale(1)`;
+        setTimeout(() => { s.el.style.opacity = '0'; }, 400);
+      });
+    }, 350);
+
+    setTimeout(() => {
+      tenEl.style.transition = 'transform .3s cubic-bezier(.17,.89,.32,1.28), opacity .2s';
+      tenEl.style.opacity = '1'; tenEl.style.transform = 'translate(-50%,-50%) scale(1)';
+    }, 500);
+    setTimeout(() => { [mainBolt,glow1,br1,br2].forEach(e => { e.style.transition='opacity .4s'; e.setAttribute('opacity',0); }); }, 1400);
+    setTimeout(() => { tenEl.style.transition = 'transform .5s ease-in, opacity .5s ease-in'; tenEl.style.transform = 'translate(-50%,-50%) scale(1.8)'; tenEl.style.opacity = '0'; }, 1700);
+    setTimeout(() => { wrap.style.transition = 'opacity .2s'; wrap.style.opacity = '0'; setTimeout(() => { wrap.remove(); resolve(); }, 250); }, DURATION);
+  });
+}
+
+// ─── Variant 10: Ten — Meteor Shower ─────────────────────
+function _burnVariant_ten_meteor() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect    = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+    const cx = rect.left + rect.width  / 2;
+    const cy = rect.top  + rect.height / 2;
+    const DURATION = 2600;
+    const N = 5;
+    const suits = ['♠','♥','♦','♣','♠'];
+
+    const cs    = getComputedStyle(document.documentElement);
+    const cardW = parseFloat(cs.getPropertyValue('--card-w')) || 72;
+    const cardH = parseFloat(cs.getPropertyValue('--card-h')) || 100;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    const sky = document.createElement('div');
+    sky.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,20,.55);opacity:0;transition:opacity .35s';
+    wrap.appendChild(sky);
+    requestAnimationFrame(() => requestAnimationFrame(() => { sky.style.opacity = '1'; }));
+
+    const meteors = [];
+    for (let m = 0; m < N; m++) {
+      const delay    = m * 140;
+      const angle    = (75 + Math.random() * 20) * Math.PI / 180;
+      const landX    = cx + (Math.random() - 0.5) * 160;
+      const landY    = cy + (Math.random() - 0.5) * 80;
+      const travelDist = window.innerHeight * 1.5;
+      const startX   = landX - Math.cos(angle) * travelDist;
+      const startY   = landY - Math.sin(angle) * travelDist;
+      const fallDur  = 420 + Math.random() * 120;
+
+      const card = makeCardEl({ rank: '10', suit: suits[m], id: m, value: 10 });
+      card.style.position   = 'absolute';
+      card.style.left       = (startX - cardW/2) + 'px';
+      card.style.top        = (startY - cardH/2) + 'px';
+      card.style.width      = cardW + 'px';
+      card.style.height     = cardH + 'px';
+      card.style.transform  = `rotate(${(angle * 180/Math.PI - 90 + (Math.random()-0.5)*15).toFixed(1)}deg)`;
+      card.style.opacity    = '0';
+      card.style.boxShadow  = '0 0 18px rgba(255,160,0,.9), 0 0 40px rgba(255,80,0,.6)';
+      card.style.border     = '2px solid rgba(255,200,80,.8)';
+      card.style.pointerEvents = 'none';
+
+      const trailCanvas = document.createElement('canvas');
+      trailCanvas.width  = window.innerWidth;
+      trailCanvas.height = window.innerHeight;
+      trailCanvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none';
+      wrap.appendChild(trailCanvas);
+      const tctx = trailCanvas.getContext('2d');
+      wrap.appendChild(card);
+
+      const RR = 55;
+      const ring = document.createElement('div');
+      ring.style.cssText = ['position:absolute',`left:${landX-RR}px`,`top:${landY-RR}px`,`width:${RR*2}px`,`height:${RR*2}px`,'border-radius:50%','border:3px solid rgba(255,180,40,.95)','box-shadow:0 0 18px rgba(255,120,0,.8)','transform:scale(0)','opacity:0'].join(';');
+      wrap.appendChild(ring);
+
+      const debris = [];
+      for (let d = 0; d < 14; d++) {
+        const p = document.createElement('div');
+        const sz = (3 + Math.random() * 6) | 0, hue = (10 + Math.random() * 40) | 0;
+        const dang = (d / 14) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+        const dist = 40 + Math.random() * 80;
+        p._tx = (Math.cos(dang)*dist).toFixed(1); p._ty = (Math.sin(dang)*dist).toFixed(1);
+        p.style.cssText = ['position:absolute',`left:${landX-sz/2}px`,`top:${landY-sz/2}px`,`width:${sz}px`,`height:${sz}px`,`border-radius:${Math.random()>.5?'50%':'3px'}`,`background:hsl(${hue},100%,62%)`,`box-shadow:0 0 ${sz*2}px hsla(${hue},100%,65%,.7)`,'opacity:0'].join(';');
+        wrap.appendChild(p);
+        debris.push(p);
+      }
+      meteors.push({ card, tctx, trailCanvas, ring, debris, delay, fallDur, startX, startY, landX, landY, angle, cardW, cardH, landed: false });
+    }
+
+    const t0 = performance.now();
+    function frame(now) {
+      const elapsed = now - t0;
+      meteors.forEach(m => {
+        const local = elapsed - m.delay;
+        if (local < 0) return;
+        if (!m.landed) {
+          const t = Math.min(1, local / m.fallDur);
+          const ease = t * t;
+          const cx_ = m.startX + (m.landX - m.startX) * ease;
+          const cy_ = m.startY + (m.landY - m.startY) * ease;
+          m.card.style.left    = (cx_ - m.cardW/2) + 'px';
+          m.card.style.top     = (cy_ - m.cardH/2) + 'px';
+          m.card.style.opacity = Math.min(1, local / 80).toFixed(2);
+
+          m.tctx.clearRect(0, 0, m.trailCanvas.width, m.trailCanvas.height);
+          const tLen = 120 + t * 60;
+          const tx0 = cx_ - Math.cos(m.angle) * tLen, ty0 = cy_ - Math.sin(m.angle) * tLen;
+          const grad = m.tctx.createLinearGradient(tx0, ty0, cx_, cy_);
+          grad.addColorStop(0,'rgba(255,120,0,0)'); grad.addColorStop(0.4,'rgba(255,180,40,.35)');
+          grad.addColorStop(0.75,'rgba(255,220,80,.7)'); grad.addColorStop(1,'rgba(255,255,200,.9)');
+          m.tctx.beginPath(); m.tctx.moveTo(tx0,ty0); m.tctx.lineTo(cx_,cy_);
+          m.tctx.strokeStyle = grad; m.tctx.lineWidth = 18*t+6; m.tctx.lineCap = 'round'; m.tctx.stroke();
+
+          if (t >= 1) {
+            m.landed = true;
+            m.card.style.left = (m.landX - m.cardW/2) + 'px';
+            m.card.style.top  = (m.landY - m.cardH/2) + 'px';
+            m.tctx.clearRect(0, 0, m.trailCanvas.width, m.trailCanvas.height);
+            m.ring.style.transition = 'transform .35s ease-out, opacity .3s ease-out .05s';
+            m.ring.style.transform  = 'scale(3.5)'; m.ring.style.opacity = '1';
+            setTimeout(() => { m.ring.style.opacity = '0'; }, 200);
+            m.debris.forEach((p, i) => {
+              p.style.opacity = '1';
+              p.style.transition = `transform .45s ease-out ${i*12}ms, opacity .4s ease-out ${i*12+80}ms`;
+              p.style.transform  = `translate(${p._tx}px,${p._ty}px) scale(0)`;
+              setTimeout(() => { p.style.opacity = '0'; }, 380);
+            });
+          }
+        }
+      });
+      if (elapsed < DURATION - 400) {
+        requestAnimationFrame(frame);
+      } else {
+        sky.style.transition = 'opacity .4s'; sky.style.opacity = '0';
+        meteors.forEach(m => { m.card.style.transition = 'opacity .4s'; m.card.style.opacity = '0'; });
+        setTimeout(() => { wrap.style.transition = 'opacity .2s'; wrap.style.opacity = '0'; }, 350);
+        setTimeout(() => { wrap.remove(); resolve(); }, 600);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// ─── Variant 11: Ten — Neon Sign Flicker ─────────────────
+function _burnVariant_ten_neon() {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
+    const DURATION = 2400;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    const PW = 180, PH = 90;
+    const panel = document.createElement('div');
+    panel.style.cssText = ['position:absolute',`left:${cx-PW/2}px`,`top:${cy-PH/2-20}px`,`width:${PW}px`,`height:${PH}px`,'border-radius:12px','background:rgba(10,0,30,.85)','border:2px solid rgba(180,0,255,.4)','box-shadow:0 0 18px rgba(180,0,255,.3)','display:flex','align-items:center','justify-content:center','transform:scale(0)','transition:transform .25s cubic-bezier(.17,.89,.32,1.28)'].join(';');
+    wrap.appendChild(panel);
+
+    const neonText = document.createElement('div');
+    neonText.textContent = '10';
+    neonText.style.cssText = 'font-size:60px;font-weight:900;color:#ff44ff;letter-spacing:4px;transition:color .05s,text-shadow .05s;font-family:sans-serif;line-height:1';
+    panel.appendChild(neonText);
+
+    const setNeon = on => {
+      neonText.style.color      = on ? '#ff44ff' : '#440033';
+      neonText.style.textShadow = on ? '0 0 8px #ff44ff,0 0 20px #ff44ff,0 0 40px #cc00ff,0 0 80px #8800cc' : 'none';
+      panel.style.boxShadow     = on ? '0 0 18px rgba(180,0,255,.3),0 0 40px rgba(255,0,255,.25)' : 'none';
+    };
+
+    const sparks = [];
+    for (let i = 0; i < 24; i++) {
+      const sp = document.createElement('div');
+      const ang = (i / 24) * Math.PI * 2, len = 20 + Math.random() * 60;
+      sp.style.cssText = ['position:absolute',`left:${cx}px`,`top:${cy-20}px`,'width:2px',`height:${len}px`,'background:linear-gradient(to bottom,#ff88ff,transparent)','transform-origin:0 0',`transform:rotate(${ang}rad) scale(0)`,'opacity:0','border-radius:2px'].join(';');
+      wrap.appendChild(sp);
+      sparks.push({ el: sp, ang });
+    }
+
+    requestAnimationFrame(() => requestAnimationFrame(() => { panel.style.transform = 'scale(1)'; setNeon(true); }));
+
+    [400,450,600,650,800,850].forEach((t, i) => setTimeout(() => setNeon(i % 2 === 1), t));
+
+    setTimeout(() => {
+      neonText.style.color      = '#fff';
+      neonText.style.textShadow = '0 0 10px #fff,0 0 30px #ff88ff,0 0 60px #ff00ff,0 0 120px #cc00ff';
+      panel.style.boxShadow     = '0 0 40px rgba(255,100,255,.8),0 0 80px rgba(255,0,255,.5)';
+      sparks.forEach((s, i) => {
+        s.el.style.opacity = '1';
+        s.el.style.transition = `transform .4s ease-out ${i*10}ms,opacity .4s ease-out ${i*10+100}ms`;
+        s.el.style.transform  = `rotate(${s.ang}rad) scale(1)`;
+        setTimeout(() => { s.el.style.opacity = '0'; }, 450);
+      });
+    }, 1000);
+
+    setTimeout(() => { setNeon(false); panel.style.opacity = '0.15'; }, 1300);
+    setTimeout(() => { neonText.style.color = '#550033'; neonText.style.textShadow = '0 0 4px rgba(255,0,128,.3)'; panel.style.opacity = '0.3'; }, 1600);
+    setTimeout(() => { panel.style.opacity = '0'; }, 1900);
+    setTimeout(() => { wrap.style.transition='opacity .2s'; wrap.style.opacity='0'; setTimeout(()=>{wrap.remove();resolve();},250); }, DURATION);
+  });
+}
+
+// ─── Variant 12: Quad — Domino Topple ────────────────────
+function _burnVariant_quad_domino(cards) {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+    const cx = rect.left + rect.width / 2;
+    const DURATION = 2600;
+
+    const cs    = getComputedStyle(document.documentElement);
+    const cardW = parseFloat(cs.getPropertyValue('--card-w'));
+    const cardH = parseFloat(cs.getPropertyValue('--card-h'));
+    const gap   = cardW * 0.35;
+    const totalW = 4 * cardW + 3 * gap;
+    const rowX   = cx - totalW / 2;
+    const rowY   = rect.top - cardH - 10;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    const cardEls = cards.slice(0, 4).map((card, i) => {
+      const el = makeCardEl(card);
+      const x  = rowX + i * (cardW + gap);
+      el.style.position      = 'fixed'; el.style.left = '0'; el.style.top = '0';
+      el.style.width         = cardW + 'px'; el.style.height = cardH + 'px';
+      el.style.transformOrigin = `${cardW/2}px ${cardH}px`;
+      el.style.transform     = `translate(${x}px,${rowY}px) scaleY(0)`;
+      el.style.pointerEvents = 'none'; el.style.zIndex = '1601';
+      document.body.appendChild(el);
+      return { el, x };
+    });
+
+    // Cards pop up
+    setTimeout(() => {
+      cardEls.forEach((c, i) => {
+        c.el.style.transition = `transform .25s ease-out ${i*60}ms`;
+        c.el.style.transform  = `translate(${c.x}px,${rowY}px) scaleY(1) rotate(0deg)`;
+      });
+    }, 50);
+
+    // Domino chain: tip each one
+    cardEls.forEach((c, i) => {
+      setTimeout(() => {
+        c.el.style.transition = `transform ${0.22+i*0.03}s ease-in`;
+        c.el.style.transform  = `translate(${c.x}px,${rowY}px) rotate(90deg)`;
+      }, 500 + i * 160);
+    });
+
+    // Fire erupts after last card falls
+    const FW = Math.round(rect.width * 2.4);
+    const FH = Math.round(rect.height * 3.5);
+    const SCALE = 3;
+    const CW = Math.ceil(FW/SCALE), CH = Math.ceil(FH/SCALE);
+    const canvas = document.createElement('canvas');
+    canvas.width = CW; canvas.height = CH;
+    canvas.style.cssText = ['position:absolute',`left:${Math.round(cx-FW/2)}px`,`top:${Math.round(rect.bottom-FH)}px`,`width:${FW}px`,`height:${FH}px`,'image-rendering:pixelated;image-rendering:crisp-edges','opacity:0','transition:opacity .3s'].join(';');
+    wrap.appendChild(canvas);
+    const fctx = canvas.getContext('2d');
+    const pal = new Uint8ClampedArray(256*4);
+    for (let i = 1; i < 256; i++) {
+      const t = i/255;
+      pal[i*4]=Math.min(255,(t*3*255)|0); pal[i*4+1]=t<0.35?0:Math.min(255,(((t-0.35)/0.65)*255)|0);
+      pal[i*4+2]=t<0.78?0:Math.min(255,(((t-0.78)/0.22)*255)|0); pal[i*4+3]=Math.min(255,(Math.min(1,t*2.2)*255)|0);
+    }
+    const buf = new Uint8Array(CW*CH);
+    const imgData = fctx.createImageData(CW,CH);
+    const pd = imgData.data;
+
+    const lastTip = 500 + 3*160 + 250;
+    setTimeout(() => { canvas.style.opacity = '1'; }, lastTip);
+
+    const t0 = performance.now();
+    function frame(now) {
+      const elapsed = now - t0;
+      if (elapsed > lastTip) {
+        const fp = (elapsed - lastTip) / (DURATION - lastTip);
+        const maxHeat = fp < 0.6 ? 215+((Math.random()*40)|0) : Math.max(0,((1-(fp-0.6)/0.4)*245)|0);
+        for (let x = 0; x < CW; x++) {
+          if (maxHeat <= 8) { buf[(CH-1)*CW+x] = 0; continue; }
+          const _nx = (x/Math.max(1,CW-1)-0.5)*2, _bell = Math.max(0,1-_nx*_nx*2.0);
+          buf[(CH-1)*CW+x] = Math.max(0,(maxHeat*(0.12+0.88*_bell)-(Math.random()*42))|0);
+        }
+        for (let y = 0; y < CH-1; y++) {
+          for (let x = 0; x < CW; x++) {
+            const drift = (Math.random()*3)|0, srcX = Math.min(CW-1,Math.max(0,x-drift+1));
+            buf[y*CW+x] = Math.max(0,buf[(y+1)*CW+srcX]-(drift&1));
+          }
+        }
+        for (let i = 0; i < CW*CH; i++) { const pi=buf[i]*4; pd[i*4]=pal[pi];pd[i*4+1]=pal[pi+1];pd[i*4+2]=pal[pi+2];pd[i*4+3]=pal[pi+3]; }
+        fctx.putImageData(imgData,0,0);
+      }
+      if (elapsed < DURATION) requestAnimationFrame(frame);
+      else {
+        cardEls.forEach(c => c.el.remove());
+        wrap.style.transition='opacity .3s'; wrap.style.opacity='0';
+        setTimeout(()=>{wrap.remove();resolve();},350);
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// ─── Variant 13: Quad — Tetris Line Clear ────────────────
+function _burnVariant_quad_tetris(cards) {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
+    const DURATION = 2200;
+
+    const cs    = getComputedStyle(document.documentElement);
+    const cardW = parseFloat(cs.getPropertyValue('--card-w'));
+    const cardH = parseFloat(cs.getPropertyValue('--card-h'));
+    const gap   = cardW * 0.08;
+    const totalW = 4 * cardW + 3 * gap;
+    const rowX   = cx - totalW / 2;
+    const rowY   = cy - cardH / 2;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    const cardEls = cards.slice(0, 4).map((card, i) => {
+      const el = makeCardEl(card);
+      const x  = rowX + i * (cardW + gap);
+      el.style.position   = 'fixed'; el.style.left = '0'; el.style.top = '0';
+      el.style.width      = cardW + 'px'; el.style.height = cardH + 'px';
+      el.style.transform  = `translate(${x}px,${-cardH - 20}px)`;
+      el.style.border     = '2px solid rgba(50,200,100,.7)';
+      el.style.boxShadow  = '0 0 12px rgba(50,200,100,.4)';
+      el.style.pointerEvents = 'none'; el.style.zIndex = '1601';
+      document.body.appendChild(el);
+      return { el, x };
+    });
+
+    // Drop cards one by one
+    cardEls.forEach((c, i) => {
+      setTimeout(() => {
+        c.el.style.transition = `transform .18s cubic-bezier(.5,0,1,1)`;
+        c.el.style.transform  = `translate(${c.x}px,${rowY - 6}px)`;
+        setTimeout(() => {
+          c.el.style.transition = 'transform .06s ease-out';
+          c.el.style.transform  = `translate(${c.x}px,${rowY}px)`;
+          c.el.style.boxShadow  = '0 0 30px rgba(50,255,100,.9)';
+          setTimeout(() => { c.el.style.boxShadow = '0 0 12px rgba(50,200,100,.4)'; }, 120);
+        }, 180);
+      }, 200 + i * 180);
+    });
+
+    // After all 4 locked: flash then scan-line wipe
+    const allInTime = 200 + 3*180 + 280;
+    let flashCount = 0;
+    function doFlash() {
+      const on = flashCount % 2 === 0;
+      cardEls.forEach(c => {
+        c.el.style.background = on ? '#aaffaa' : '';
+        c.el.style.boxShadow  = on ? '0 0 30px rgba(50,255,100,.9)' : '0 0 12px rgba(50,200,100,.4)';
+      });
+      flashCount++;
+      if (flashCount < 6) setTimeout(doFlash, 90);
+      else {
+        const scanner = document.createElement('div');
+        scanner.style.cssText = ['position:absolute',`left:${rowX-20}px`,`top:${rowY}px`,'width:10px',`height:${cardH}px`,'background:linear-gradient(to right,transparent,rgba(100,255,120,.95),transparent)','box-shadow:0 0 20px rgba(50,255,100,.7)','transition:none'].join(';');
+        wrap.appendChild(scanner);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          scanner.style.transition = 'left .2s linear';
+          scanner.style.left = (rowX + totalW + 20) + 'px';
+        }));
+        cardEls.forEach((c, i) => {
+          setTimeout(() => { c.el.style.transition = 'opacity .12s'; c.el.style.opacity = '0'; }, i * 50);
+        });
+        const lc = document.createElement('div');
+        lc.textContent = 'LINE CLEAR';
+        lc.style.cssText = ['position:absolute',`left:${cx}px`,`top:${rowY-40}px`,'transform:translateX(-50%) scale(0)','font-size:22px','font-weight:900','color:#44ff88','text-shadow:0 0 12px #44ff88,0 0 30px #00cc55','letter-spacing:.12em','transition:transform .2s cubic-bezier(.17,.89,.32,1.28)','font-family:sans-serif'].join(';');
+        wrap.appendChild(lc);
+        requestAnimationFrame(() => requestAnimationFrame(() => { lc.style.transform = 'translateX(-50%) scale(1)'; }));
+        setTimeout(() => { lc.style.transition += ',opacity .4s'; lc.style.opacity = '0'; }, 600);
+      }
+    }
+    setTimeout(doFlash, allInTime);
+
+    setTimeout(() => {
+      cardEls.forEach(c => c.el.remove());
+      wrap.style.transition='opacity .3s'; wrap.style.opacity='0';
+      setTimeout(()=>{wrap.remove();resolve();},350);
+    }, DURATION);
+  });
+}
+
+// ─── Variant 14: Quad — Fan Deal & Implode ───────────────
+function _burnVariant_quad_fan(cards) {
+  return new Promise(resolve => {
+    const pileEl = document.getElementById('pile-visual');
+    if (!pileEl) { resolve(); return; }
+    const rect = pileEl.getBoundingClientRect();
+    if (!rect.width) { resolve(); return; }
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
+    const DURATION = 2700;
+
+    const cs    = getComputedStyle(document.documentElement);
+    const cardW = parseFloat(cs.getPropertyValue('--card-w'));
+    const cardH = parseFloat(cs.getPropertyValue('--card-h'));
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:1600;overflow:hidden';
+    document.body.appendChild(wrap);
+
+    const SR = 160;
+    const spotlight = document.createElement('div');
+    spotlight.style.cssText = ['position:absolute',`left:${cx-SR}px`,`top:${cy-SR*1.3}px`,`width:${SR*2}px`,`height:${SR*2.6}px`,'background:radial-gradient(ellipse,rgba(255,240,180,.18) 0%,transparent 70%)','border-radius:50%','opacity:0','transition:opacity .4s'].join(';');
+    wrap.appendChild(spotlight);
+
+    const fanAngles  = [-28, -10, 10, 28];
+    const fanRadius  = 90;
+    const fanCenterY = cy + 35;
+
+    const cardEls = cards.slice(0, 4).map((card, i) => {
+      const el = makeCardEl(card);
+      el.style.position      = 'fixed'; el.style.left = '0'; el.style.top = '0';
+      el.style.width         = cardW + 'px'; el.style.height = cardH + 'px';
+      el.style.transformOrigin = `${cardW/2}px ${cardH*1.2}px`;
+      el.style.transform     = `translate(${cx-cardW/2}px,${fanCenterY-cardH*.8}px) rotate(0deg) scale(0)`;
+      el.style.opacity       = '0';
+      el.style.pointerEvents = 'none'; el.style.zIndex = '1601';
+      document.body.appendChild(el);
+      return { el, angle: fanAngles[i] };
+    });
+
+    // Deal into fan
+    cardEls.forEach((c, i) => {
+      setTimeout(() => {
+        const rad = c.angle * Math.PI / 180;
+        const tx  = cx - cardW/2 + Math.sin(rad) * fanRadius;
+        const ty  = fanCenterY - cardH * 0.8 - Math.cos(rad) * fanRadius * 0.3;
+        c.el.style.transition = `transform .3s cubic-bezier(.17,.89,.32,1.28), opacity .15s`;
+        c.el.style.opacity    = '1';
+        c.el.style.transform  = `translate(${tx}px,${ty}px) rotate(${c.angle}deg) scale(1)`;
+      }, 150 + i * 180);
+    });
+
+    setTimeout(() => { spotlight.style.opacity = '1'; }, 150 + 3*180 + 150);
+    cardEls.forEach((c, i) => {
+      setTimeout(() => { c.el.style.boxShadow = '0 0 20px rgba(255,200,80,.8),0 2px 8px rgba(0,0,0,.4)'; }, 150 + i*180 + 300);
+    });
+
+    // Implode
+    const implodeTime = 150 + 3*180 + 700;
+    setTimeout(() => {
+      spotlight.style.transition = 'opacity .3s'; spotlight.style.opacity = '0';
+      cardEls.forEach(c => {
+        c.el.style.transition = 'left .3s ease-in, top .3s ease-in, transform .3s ease-in, opacity .25s ease-in .05s';
+        c.el.style.transform  = `translate(${cx-cardW/2}px,${cy-cardH/2}px) rotate(0deg) scale(0.2)`;
+        c.el.style.opacity    = '0';
+      });
+      setTimeout(() => {
+        const FR = 80;
+        const flash2 = document.createElement('div');
+        flash2.style.cssText = ['position:absolute',`left:${cx-FR}px`,`top:${cy-FR}px`,`width:${FR*2}px`,`height:${FR*2}px`,'border-radius:50%','background:radial-gradient(circle,rgba(255,255,200,.98) 0%,rgba(255,200,80,.7) 40%,transparent 75%)','transform:scale(0)','transition:transform .15s ease-out'].join(';');
+        wrap.appendChild(flash2);
+        requestAnimationFrame(() => requestAnimationFrame(() => { flash2.style.transform = 'scale(1)'; }));
+        setTimeout(() => { flash2.style.transition += ',opacity .3s'; flash2.style.opacity = '0'; }, 150);
+        for (let i = 0; i < 24; i++) {
+          const p = document.createElement('div');
+          const ang = (i/24)*Math.PI*2, d = 60+Math.random()*100, sz = (3+Math.random()*6)|0;
+          const hue = (40+Math.random()*30)|0;
+          p.style.cssText = ['position:absolute',`left:${cx-sz/2}px`,`top:${cy-sz/2}px`,`width:${sz}px`,`height:${sz}px`,'border-radius:50%',`background:hsl(${hue},100%,65%)`,'opacity:1'].join(';');
+          wrap.appendChild(p);
+          p.style.transition = 'transform .5s ease-out, opacity .4s ease-out .1s';
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            p.style.transform = `translate(${(Math.cos(ang)*d).toFixed(1)}px,${(Math.sin(ang)*d).toFixed(1)}px) scale(0)`;
+            p.style.opacity   = '0';
+          }));
+        }
+      }, 300);
+    }, implodeTime);
+
+    setTimeout(() => {
+      cardEls.forEach(c => c.el.remove());
+      wrap.style.transition='opacity .3s'; wrap.style.opacity='0';
+      setTimeout(()=>{wrap.remove();resolve();},350);
+    }, DURATION);
   });
 }
 
