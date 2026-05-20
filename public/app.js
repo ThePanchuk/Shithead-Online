@@ -3867,23 +3867,8 @@ document.getElementById('lobby-timer-enabled').addEventListener('change', functi
     }).catch(() => {});
   }
 
-  const scrollEl = document.getElementById('lobby-timer-scroll');
-
-  // Mouse wheel
-  scrollEl.addEventListener('wheel', function (e) {
-    e.preventDefault();
-    setTimerSeconds(_lobbyTimerSeconds + (e.deltaY < 0 ? 10 : -10));
-  }, { passive: false });
-
-  // Touch swipe (one step per gesture)
-  let _ty = null;
-  scrollEl.addEventListener('touchstart', e => { _ty = e.touches[0].clientY; }, { passive: true });
-  scrollEl.addEventListener('touchend',   e => {
-    if (_ty === null) return;
-    const dy = _ty - e.changedTouches[0].clientY;
-    if (Math.abs(dy) > 8) setTimerSeconds(_lobbyTimerSeconds + (dy > 0 ? 10 : -10));
-    _ty = null;
-  }, { passive: true });
+  document.getElementById('lobby-timer-dec').addEventListener('click', () => setTimerSeconds(_lobbyTimerSeconds - 10));
+  document.getElementById('lobby-timer-inc').addEventListener('click', () => setTimerSeconds(_lobbyTimerSeconds + 10));
 })();
 
 document.getElementById('btn-leave-room').onclick = () => {

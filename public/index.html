@@ -105,33 +105,53 @@
 
       <!-- ── Lobby waiting panel ── -->
       <div id="online-lobby-panel" class="hidden">
+
+        <!-- Full-width room code display -->
         <div class="lobby-code-box">
           <span class="lobby-code-eyebrow">Room Code</span>
           <strong id="room-code-display">----</strong>
         </div>
-        <div id="lobby-player-list"></div>
 
-        <!-- Timer control — visible to host in Classic Mode only -->
-        <div id="lobby-timer-row" class="hidden">
-          <div class="lobby-timer-wrap">
-            <label class="checkbox-label">
-              <input type="checkbox" id="lobby-timer-enabled">
-              Turn timer
-            </label>
-            <div id="lobby-timer-val-wrap" class="hidden">
-              <div id="lobby-timer-scroll" class="timer-scroll-widget" title="Scroll or swipe up/down to adjust">
-                <span id="lobby-timer-val">30</span><span class="timer-s-label">s</span>
+        <!-- Two-column body: players left, settings+actions right -->
+        <div class="lobby-body">
+
+          <div class="lobby-col lobby-col-players">
+            <div class="lobby-col-label">Players</div>
+            <div id="lobby-player-list"></div>
+          </div>
+
+          <div class="lobby-col lobby-col-actions">
+            <!-- Timer control — visible to host in Classic Mode only -->
+            <div id="lobby-timer-row" class="hidden">
+              <div class="lobby-timer-modern">
+                <div class="lobby-timer-header">
+                  <span class="lobby-timer-label">Turn Timer</span>
+                  <label class="lobby-toggle">
+                    <input type="checkbox" id="lobby-timer-enabled">
+                    <span class="lobby-toggle-thumb"></span>
+                  </label>
+                </div>
+                <div id="lobby-timer-val-wrap" class="hidden">
+                  <div class="lobby-timer-stepper">
+                    <button class="lobby-stepper-btn" id="lobby-timer-dec" type="button">−</button>
+                    <span class="lobby-timer-val-display">
+                      <span id="lobby-timer-val">30</span><span class="timer-s-label">s</span>
+                    </span>
+                    <button class="lobby-stepper-btn" id="lobby-timer-inc" type="button">+</button>
+                  </div>
+                </div>
               </div>
-              <span class="timer-scroll-hint">↕ scroll&thinsp;(10–120s)</span>
+            </div>
+
+            <div class="lobby-actions-spacer"></div>
+            <p id="lobby-status" class="lobby-status"></p>
+            <div class="btn-row">
+              <button class="btn btn-ghost" id="btn-leave-room">Leave</button>
+              <button class="btn btn-primary hidden" id="btn-start-online">Start Game →</button>
             </div>
           </div>
-        </div>
 
-        <p id="lobby-status" class="lobby-status"></p>
-        <div class="btn-row">
-          <button class="btn btn-ghost" id="btn-leave-room">Leave</button>
-          <button class="btn btn-primary hidden" id="btn-start-online">Start Game →</button>
-        </div>
+        </div><!-- /lobby-body -->
       </div>
 
     </div>

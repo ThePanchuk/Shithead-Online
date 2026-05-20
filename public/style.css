@@ -407,7 +407,7 @@ a { color: #7ec88a; }
   line-height: 1.1;
 }
 
-#lobby-player-list { display: flex; flex-direction: column; gap: .35rem; min-height: 52px; }
+#lobby-player-list { display: flex; flex-direction: column; gap: .35rem; }
 .lobby-player {
   display: flex;
   align-items: center;
@@ -423,7 +423,137 @@ a { color: #7ec88a; }
   background: rgba(212,168,32,.07);
 }
 .lobby-player.host::after { content: ' 👑'; margin-left: auto; }
-.lobby-status { font-size: .85rem; color: #99c09d; }
+.lobby-status { font-size: .82rem; color: #99c09d; }
+
+/* ── Lobby two-column body ───────────────────────────── */
+.lobby-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .85rem;
+  align-items: stretch;
+}
+.lobby-col {
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+}
+.lobby-col-label {
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.28);
+}
+.lobby-col-actions { gap: .55rem; }
+.lobby-actions-spacer { flex: 1; min-height: .4rem; }
+
+/* ── Modern timer control ───────────────────────────── */
+.lobby-timer-modern {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+  padding: .7rem .85rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.lobby-timer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.lobby-timer-label {
+  font-size: .82rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.65);
+}
+
+/* Pill toggle switch (larger than the sort toggle) */
+.lobby-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  background: rgba(255,255,255,.14);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.2);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background .18s, border-color .18s;
+}
+.lobby-toggle input {
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.lobby-toggle-thumb {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.65);
+  pointer-events: none;
+  transition: left .18s, background .18s;
+}
+.lobby-toggle:has(input:checked) {
+  background: rgba(212,168,32,.25);
+  border-color: rgba(212,168,32,.45);
+}
+.lobby-toggle input:checked + .lobby-toggle-thumb {
+  left: 22px;
+  background: var(--gold);
+}
+
+/* Timer stepper (−  30s  +) */
+.lobby-timer-stepper {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  justify-content: center;
+}
+.lobby-stepper-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.20);
+  color: rgba(255,255,255,.85);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, transform .1s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.lobby-stepper-btn:hover  { background: rgba(255,255,255,.22); }
+.lobby-stepper-btn:active { transform: scale(.88); }
+.lobby-timer-val-display {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gold);
+  min-width: 52px;
+  text-align: center;
+  letter-spacing: .02em;
+}
+.lobby-timer-val-display .timer-s-label {
+  font-size: .8rem;
+  font-weight: 500;
+  color: #aaa;
+  margin-left: 1px;
+}
+
+/* Stack to single column on phones */
+@media (max-width: 480px) { .lobby-body { grid-template-columns: 1fr; } }
 
 /* ── Lobby timer control ────────────────────────────── */
 #lobby-timer-row { margin-top: .55rem; }
