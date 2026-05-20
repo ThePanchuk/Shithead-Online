@@ -48,6 +48,9 @@ function computeBurnContext(playedCards, pileBeforePlay) {
 // Track burned-pile length across online renders to detect new burns
 let _prevOnlineBurnCount = -1;
 
+// Full previous render state — used to detect opponent card plays for fly animation
+let _prevOnlineState = null;
+
 // Classic Mode mistake tracking
 let _prevMistakeSeq   = -1;   // last seen mistake seq; -1 = not yet in play phase
 let _mistakeAnimating = false; // blocks renderOnlineGame during animation
@@ -2990,6 +2993,7 @@ function stopRoom() {
   _timerTurnCount     = 0;
   _prevTenLossSeq     = -1;
   _deferredTenLoss    = null;
+  _prevOnlineState    = null;
 }
 
 // ─── Create / Join ─────────────────────────────────────
@@ -3699,12 +3703,50 @@ function renderOnlineGame(state) {
   document.getElementById('btn-pickup').classList.toggle('btn-action-dim',
     !canAct || (state.pile || []).length === 0 || (forcedFaceUpPickup && selectedCards.length === 0));
 
+  // ── Opponent card-play fly animation ───────────────────
+  // Detect: pile grew since last render AND an opponent was the last to play.
+  // Capture the source rect from the CURRENT DOM before we clear the opponents area.
+  let _pendingFlyCards = null;
+  let _pendingFlySrc   = null;
+  if (_prevOnlineState && !_mistakeAnimating && !_fdFlipAnimating) {
+    const prevPile = _prevOnlineState.pile || [];
+    const currPile = state.pile || [];
+    const pIdx     = state.lastPlayerIdx;
+    if (currPile.length > prevPile.length &&
+        pIdx !== null && pIdx !== undefined &&
+        pIdx !== state.myIndex) {
+      const addedCount   = currPile.length - prevPile.length;
+      _pendingFlyCards   = currPile.slice(-addedCount);
+      // Find the opponent slot that still exists in the DOM from the previous render
+      const slot = document.querySelector(`#opponents-area .opponent-slot[data-idx="${pIdx}"]`);
+      if (slot) {
+        // Was it a face-down play? (their faceDownCount shrank)
+        const prevFdCount = _prevOnlineState.players?.[pIdx]?.faceDownCount ?? 0;
+        const currFdCount = state.players?.[pIdx]?.faceDownCount ?? 0;
+        const wasFdPlay   = prevFdCount > currFdCount;
+        const srcEl = wasFdPlay
+          ? (slot.querySelector('.opp-tableau') || slot)
+          : (slot.querySelector('.opp-hand-fan') || slot);
+        _pendingFlySrc = srcEl.getBoundingClientRect();
+      }
+    }
+  }
+
   const oArea = document.getElementById('opponents-area');
   oArea.innerHTML = '';
   state.players.forEach((p, i) => {
     if (i === state.myIndex) return;
-    oArea.appendChild(buildOpponentSlot(p, i === state.currentPlayerIndex, p.faceDownCount, p.faceUp, p.handCount));
+    const slotEl = buildOpponentSlot(p, i === state.currentPlayerIndex, p.faceDownCount, p.faceUp, p.handCount);
+    slotEl.dataset.idx = i;   // used by the fly-animation detector above
+    oArea.appendChild(slotEl);
   });
+
+  // Fire the fly animation now that the DOM (pile, opponents) is up to date
+  if (_pendingFlyCards && _pendingFlySrc) {
+    flyCardsToPile(_pendingFlyCards, _pendingFlyCards.map(() => _pendingFlySrc));
+  }
+
+  _prevOnlineState = state;  // snapshot for next render's diff
 }
 
 function onlineToggleSelect(card) {
