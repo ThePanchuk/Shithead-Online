@@ -94,6 +94,23 @@
       <div id="online-lobby-panel" class="hidden">
         <div class="room-code-label">Room Code: <strong id="room-code-display">----</strong></div>
         <div id="lobby-player-list"></div>
+
+        <!-- Timer control — visible to host in Classic Mode only -->
+        <div id="lobby-timer-row" class="hidden">
+          <div class="lobby-timer-wrap">
+            <label class="checkbox-label">
+              <input type="checkbox" id="lobby-timer-enabled">
+              Turn timer
+            </label>
+            <div id="lobby-timer-val-wrap" class="hidden">
+              <div id="lobby-timer-scroll" class="timer-scroll-widget" title="Scroll or swipe up/down to adjust">
+                <span id="lobby-timer-val">30</span><span class="timer-s-label">s</span>
+              </div>
+              <span class="timer-scroll-hint">↕ scroll&thinsp;(10–120s)</span>
+            </div>
+          </div>
+        </div>
+
         <p id="lobby-status" class="lobby-status"></p>
         <div class="btn-row">
           <button class="btn btn-ghost" id="btn-leave-room">Leave</button>
@@ -133,6 +150,13 @@
         <span id="direction-indicator" class="direction-badge" title="Play direction">↻</span>
         <span id="deck-info">🂠 <span id="deck-count">0</span></span>
         <span id="seven-warning" class="hidden" title="After a 7, next play must be lower than 7">⚠ &lt;7 only!</span>
+        <div id="timer-display" class="hidden">
+          <svg class="timer-ring" viewBox="0 0 36 36" width="26" height="26">
+            <circle class="timer-ring-bg" cx="18" cy="18" r="14"/>
+            <circle id="timer-ring-arc" class="timer-ring-arc" cx="18" cy="18" r="14"/>
+          </svg>
+          <span id="timer-countdown">30</span>
+        </div>
       </div>
     </div>
 

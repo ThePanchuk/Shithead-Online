@@ -314,6 +314,25 @@ a { color: #7ec88a; }
 .lobby-player.host::after { content: ' 👑'; }
 .lobby-status { font-size: .85rem; color: #99c09d; }
 
+/* ── Lobby timer control ────────────────────────────── */
+#lobby-timer-row { margin-top: .55rem; }
+.lobby-timer-wrap { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+.timer-scroll-widget {
+  display: inline-flex; align-items: baseline; gap: 2px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 8px;
+  padding: .22rem .65rem;
+  cursor: ns-resize;
+  user-select: none;
+  font-size: 1.05rem; font-weight: 700; color: var(--gold);
+  transition: background .15s;
+  touch-action: none;
+}
+.timer-scroll-widget:hover { background: rgba(255,255,255,.17); }
+.timer-s-label { font-size: .76rem; font-weight: 500; color: #bbb; margin-left: 1px; }
+.timer-scroll-hint { font-size: .77rem; color: #8aa; }
+
 /* ═══════════════════════════════════════════════════════
    Swap Screen
    ═══════════════════════════════════════════════════════ */
@@ -624,6 +643,28 @@ a { color: #7ec88a; }
   line-height: 1;
 }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+
+/* ── In-game turn timer ──────────────────────────────── */
+#timer-display {
+  display: flex; align-items: center; gap: 4px;
+  font-size: .82rem; font-weight: 700; color: #ccc;
+}
+#timer-display.hidden { display: none; }
+.timer-ring { overflow: visible; }
+.timer-ring-bg  { fill: none; stroke: rgba(255,255,255,.14); stroke-width: 3; }
+.timer-ring-arc {
+  fill: none; stroke: #5bcfff; stroke-width: 3;
+  stroke-dasharray: 87.96 87.96; stroke-dashoffset: 0;
+  transform: rotate(-90deg); transform-origin: 18px 18px;
+  transition: stroke .35s;
+}
+#timer-display.warning .timer-ring-arc,
+#timer-display.warning #timer-countdown { stroke: #f93; color: #f93; }
+#timer-display.urgent  .timer-ring-arc  { stroke: #f44; }
+#timer-display.urgent  #timer-countdown { color: #f44; animation: timer-pulse .45s ease-in-out infinite alternate; }
+#timer-display.my-turn svg { width: 34px; height: 34px; }
+#timer-display.my-turn #timer-countdown { font-size: .92rem; }
+@keyframes timer-pulse { from { opacity: 1; } to { opacity: .3; } }
 
 /* ═══════════════════════════════════════════════════════
    Table  (green felt)

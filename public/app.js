@@ -56,6 +56,13 @@ let _playPhaseShown   = false; // true once we've initialised _prevMistakeSeq fo
 // Pickup animation tracking
 let _prevPickupSeq    = -1;   // last seen pickup seq; -1 = not yet in play phase
 
+// Turn timer (Classic Mode online)
+let _timerHandle        = null;  // setTimeout for auto-timeout
+let _timerInterval      = null;  // setInterval for display
+let _timerTurnKey       = null;  // turn key — cleared stale timers
+let _timerLastPlayerIdx = -1;    // detect when current player changes
+let _timerTurnCount     = 0;     // local counter for unique turn keys
+
 // Face-down flip animation (online) — blocks renderOnlineGame while the reveal plays
 let _fdFlipAnimating = false;
 
@@ -1909,6 +1916,86 @@ function pickupAnimation(playerName, pileCount, towardsHuman) {
   }, 1100);
 }
 
+// ─── Turn timer ────────────────────────────────────────
+
+const TIMER_CIRC = 87.96; // 2π × r=14 (SVG circle in timer-ring)
+
+function clearTimer() {
+  clearTimeout(_timerHandle);
+  clearInterval(_timerInterval);
+  _timerHandle = _timerInterval = null;
+  _timerTurnKey = null;
+  const el = document.getElementById('timer-display');
+  if (el) el.classList.add('hidden');
+}
+
+// Start a countdown. isMyTurn=true → auto-fires fbTimerMistake on expiry.
+function startTimer(totalSeconds, isMyTurn, turnKey) {
+  clearTimer();
+  _timerTurnKey = turnKey;
+
+  const display   = document.getElementById('timer-display');
+  const countdown = document.getElementById('timer-countdown');
+  const arc       = document.getElementById('timer-ring-arc');
+  if (!display || !countdown || !arc) return;
+
+  const endTime = Date.now() + totalSeconds * 1000;
+
+  display.classList.remove('hidden', 'my-turn', 'warning', 'urgent');
+  display.classList.toggle('my-turn', isMyTurn);
+
+  function tick() {
+    const remaining = Math.max(0, (endTime - Date.now()) / 1000);
+    countdown.textContent = Math.ceil(remaining);
+    arc.style.strokeDashoffset = String(TIMER_CIRC * (1 - remaining / totalSeconds));
+    if (remaining <= 5) {
+      display.classList.add('urgent');
+      display.classList.remove('warning');
+    } else if (remaining <= 10) {
+      display.classList.add('warning');
+      display.classList.remove('urgent');
+    } else {
+      display.classList.remove('warning', 'urgent');
+    }
+  }
+
+  tick();
+  _timerInterval = setInterval(tick, 200);
+
+  if (isMyTurn) {
+    _timerHandle = setTimeout(() => {
+      if (_timerTurnKey === turnKey) { clearTimer(); fbTimerMistake(); }
+    }, totalSeconds * 1000);
+  }
+}
+
+// Called when the timer expires on the active player's client.
+// Picks up the pile and registers it as a Classic Mode mistake.
+async function fbTimerMistake() {
+  if (!currentRoomCode) return;
+  try {
+    await window.db.runTransaction(async t => {
+      const snap = await t.get(roomRef(currentRoomCode));
+      const s    = snap.data();
+      if (s.currentPlayerIndex !== myOnlineIndex) return; // stale — move already made
+      if (s.gameMode !== 'classic' || !s.timerEnabled)   return;
+      const players = s.players.map(p => ({ ...p, hand: [...p.hand] }));
+      const me      = players[myOnlineIndex];
+      me.hand = [...me.hand, ...(s.pile || [])];
+      const mistakeSeq = (s.mistake?.seq ?? -1) + 1;
+      const idx = advanceTurnBy(players, myOnlineIndex, 1, s.direction || 1);
+      t.update(roomRef(currentRoomCode), {
+        players, pile: [], sevenActive: false,
+        currentPlayerIndex: idx,
+        mistake: { playerIdx: myOnlineIndex, seq: mistakeSeq },
+        lastPlayerIdx: null,
+        lastActivity: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+  } catch(e) { /* silent — timer race is non-critical */ }
+  stageClear();
+}
+
 // ═══════════════════════════════════════════════════════
 //  Classic Mode — manual deck draw
 // ═══════════════════════════════════════════════════════
@@ -2720,9 +2807,10 @@ function showGameOver() {
 // ═══════════════════════════════════════════════════════
 //  ONLINE MODE  – Firebase Firestore
 // ═══════════════════════════════════════════════════════
-let currentRoomCode  = null;
-let roomUnsubscribe  = null;
-let _swapShown       = false;
+let currentRoomCode    = null;
+let roomUnsubscribe    = null;
+let _swapShown         = false;
+let _lobbyTimerSeconds = 30;   // host's in-lobby timer setting (mirrored from Firestore)
 
 function fbReady() {
   if (!window.db) {
@@ -2751,6 +2839,9 @@ function stopRoom() {
   _mistakeAnimating = false;
   _playPhaseShown   = false;
   _fdFlipAnimating  = false;
+  clearTimer();
+  _timerLastPlayerIdx = -1;
+  _timerTurnCount     = 0;
 }
 
 // ─── Create / Join ─────────────────────────────────────
@@ -2765,6 +2856,7 @@ async function createRoom(name) {
     await roomRef(code).set({
       code, phase: 'lobby', hostIdx: 0,
       gameMode: _pendingOnlineMode || 'pathetic',
+      timerEnabled: false, timerSeconds: 30,
       players: [{ name, idx: 0, finished: false, finishOrder: null,
                   swapReady: false, hand: [], faceUp: [], faceDown: [] }],
       currentPlayerIndex: 0, direction: 1, sevenActive: false,
@@ -2851,8 +2943,26 @@ function onRoomUpdate(s) {
       `<div class="lobby-player${i === 0 ? ' host' : ''}">${escHtml(p.name)}</div>`
     ).join('');
     const modeLabel = s.gameMode === 'classic' ? ' · Classic Mode ⚡' : ' · Pathetic Mode';
+    let timerLabel = '';
+    if (s.gameMode === 'classic') {
+      timerLabel = s.timerEnabled ? ` · Timer: ${s.timerSeconds}s` : ' · Timer: off';
+    }
     document.getElementById('lobby-status').textContent =
-      `${s.players.length}/5 — ${s.players.length < 2 ? 'Waiting for players…' : 'Ready to start!'}${modeLabel}`;
+      `${s.players.length}/5 — ${s.players.length < 2 ? 'Waiting for players…' : 'Ready to start!'}${modeLabel}${timerLabel}`;
+
+    // Timer control row: only for host in Classic Mode
+    const timerRow = document.getElementById('lobby-timer-row');
+    if (s.gameMode === 'classic' && myOnlineIndex === 0) {
+      timerRow.classList.remove('hidden');
+      const cb = document.getElementById('lobby-timer-enabled');
+      cb.checked = !!s.timerEnabled;
+      _lobbyTimerSeconds = s.timerSeconds || 30;
+      document.getElementById('lobby-timer-val').textContent = _lobbyTimerSeconds;
+      document.getElementById('lobby-timer-val-wrap').classList.toggle('hidden', !s.timerEnabled);
+    } else {
+      timerRow.classList.add('hidden');
+    }
+
     const btnStart = document.getElementById('btn-start-online');
     btnStart.classList.toggle('hidden', myOnlineIndex !== 0);
     if (myOnlineIndex === 0) btnStart.disabled = s.players.length < 2;
@@ -2900,6 +3010,23 @@ function onRoomUpdate(s) {
     }
 
     renderOnlineGame(OG);
+
+    // Turn timer
+    if (s.timerEnabled && (s.timerSeconds || 0) > 0 && s.phase === 'play') {
+      const activeP = s.players[s.currentPlayerIndex];
+      if (activeP && !activeP.finished) {
+        if (s.currentPlayerIndex !== _timerLastPlayerIdx) {
+          _timerLastPlayerIdx = s.currentPlayerIndex;
+          _timerTurnCount++;
+          startTimer(s.timerSeconds, s.currentPlayerIndex === myOnlineIndex,
+                     `${currentRoomCode}:${_timerTurnCount}`);
+        }
+      } else {
+        clearTimer();
+      }
+    } else if (s.phase === 'ended' || !s.timerEnabled) {
+      clearTimer();
+    }
 
     // Pickup animation — fire-and-forget, non-blocking
     const newPickupSeq = s.lastPickup?.seq ?? -1;
@@ -3523,6 +3650,47 @@ document.getElementById('btn-join-room').onclick = () => {
 };
 
 document.getElementById('btn-start-online').onclick = () => startOnlineGame();
+
+// ─── Lobby timer controls ──────────────────────────────
+
+document.getElementById('lobby-timer-enabled').addEventListener('change', function () {
+  if (!currentRoomCode) return;
+  document.getElementById('lobby-timer-val-wrap').classList.toggle('hidden', !this.checked);
+  roomRef(currentRoomCode).update({
+    timerEnabled: this.checked,
+    lastActivity: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(() => {});
+});
+
+(function () {
+  function setTimerSeconds(newVal) {
+    _lobbyTimerSeconds = Math.min(120, Math.max(10, Math.round(newVal / 10) * 10));
+    document.getElementById('lobby-timer-val').textContent = _lobbyTimerSeconds;
+    if (!currentRoomCode) return;
+    roomRef(currentRoomCode).update({
+      timerSeconds: _lobbyTimerSeconds,
+      lastActivity: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
+  }
+
+  const scrollEl = document.getElementById('lobby-timer-scroll');
+
+  // Mouse wheel
+  scrollEl.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    setTimerSeconds(_lobbyTimerSeconds + (e.deltaY < 0 ? 10 : -10));
+  }, { passive: false });
+
+  // Touch swipe (one step per gesture)
+  let _ty = null;
+  scrollEl.addEventListener('touchstart', e => { _ty = e.touches[0].clientY; }, { passive: true });
+  scrollEl.addEventListener('touchend',   e => {
+    if (_ty === null) return;
+    const dy = _ty - e.changedTouches[0].clientY;
+    if (Math.abs(dy) > 8) setTimerSeconds(_lobbyTimerSeconds + (dy > 0 ? 10 : -10));
+    _ty = null;
+  }, { passive: true });
+})();
 
 document.getElementById('btn-leave-room').onclick = () => {
   const code = currentRoomCode;
