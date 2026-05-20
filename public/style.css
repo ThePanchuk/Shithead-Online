@@ -1230,7 +1230,7 @@ a { color: #7ec88a; }
   padding: 8px 10px;
   padding-bottom: max(10px, env(safe-area-inset-bottom));
   background: rgba(0,0,0,.90);
-  border: 3px solid var(--rail);
+  border: 3px solid #1a3d20;
   flex-shrink: 0;
   flex-wrap: wrap;
   /* pull bar up over the lower 40% of the hand cards */
