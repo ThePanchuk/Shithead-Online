@@ -3951,3 +3951,26 @@ document.addEventListener('keydown', e => {
     _deckBeginDrag(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive: false });
 })();
+
+// ─── Hand fan scroll-overflow fade hints ──────────────
+(function setupHandScrollHints() {
+  const scrollEl = document.querySelector('.hand-fan-scroll');
+  const wrapEl   = scrollEl ? scrollEl.parentElement : null;
+  if (!scrollEl || !wrapEl) return;
+
+  function updateHints() {
+    if (!scrollEl.clientWidth) return;   // element hidden — skip
+    const overflows = scrollEl.scrollWidth > scrollEl.clientWidth + 2;
+    const hasLeft   = overflows && scrollEl.scrollLeft > 2;
+    const hasRight  = overflows && scrollEl.scrollLeft < scrollEl.scrollWidth - scrollEl.clientWidth - 2;
+    wrapEl.classList.toggle('fade-left',  hasLeft);
+    wrapEl.classList.toggle('fade-right', hasRight);
+  }
+
+  // Update on scroll
+  scrollEl.addEventListener('scroll', updateHints, { passive: true });
+
+  // Update whenever cards are added/removed from the hand fan
+  new MutationObserver(() => setTimeout(updateHints, 30))
+    .observe(document.getElementById('human-hand'), { childList: true });
+})();

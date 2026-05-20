@@ -773,6 +773,9 @@ a { color: #7ec88a; }
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  /* Tell the browser this element handles horizontal panning so touch-swipe
+     isn't eaten by card click handlers on iOS/Android */
+  touch-action: pan-x;
 }
 .hand-fan-scroll::-webkit-scrollbar { display: none; }
 
@@ -796,6 +799,8 @@ a { color: #7ec88a; }
   transform-origin: bottom center;
   transform: rotate(var(--fan-angle, 0deg));
   transition: transform .15s, box-shadow .15s, z-index 0s;
+  /* Allow fast taps while letting the parent scroll container handle horizontal panning */
+  touch-action: manipulation;
 }
 
 /* Override global :hover; keep the rotation */
@@ -1173,7 +1178,31 @@ a { color: #7ec88a; }
   /* Clip rotated card corners that visually extend below the fan container.
      This is the "fixed horizontal line" that hides the lower part of hand cards. */
   overflow: hidden;
+  position: relative; /* anchor for fade edge pseudo-elements */
 }
+/* Fade-edge overflow hints — toggled by JS (.fade-left / .fade-right) */
+.hand-zone-wrap::before,
+.hand-zone-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38px;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity .25s;
+}
+.hand-zone-wrap::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(0,0,0,.6), transparent);
+}
+.hand-zone-wrap::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(0,0,0,.6), transparent);
+}
+.hand-zone-wrap.fade-left::before  { opacity: 1; }
+.hand-zone-wrap.fade-right::after  { opacity: 1; }
 
 /* ── Row 3: Bottom action bar (always visible) ──
    Negative margin-top pulls the bar UP to overlap the hand fan, hiding the
