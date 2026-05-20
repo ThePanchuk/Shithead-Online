@@ -1916,6 +1916,51 @@ function pickupAnimation(playerName, pileCount, towardsHuman) {
   }, 1100);
 }
 
+// ─── First-player announcement ─────────────────────────
+function firstPlayerAnnouncement(name, isMe) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0',
+      'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
+      'background:rgba(0,0,0,0.55)',
+      'z-index:2000', 'pointer-events:none',
+      'opacity:0', 'transition:opacity 0.2s ease-out',
+    ].join(';');
+
+    const suitsEl = document.createElement('div');
+    suitsEl.textContent = '♠  ♥  ♦  ♣';
+    suitsEl.style.cssText = [
+      'font-size:clamp(16px,3.5vw,24px)', 'color:rgba(255,255,255,.35)',
+      'letter-spacing:.55em', 'margin-bottom:12px',
+    ].join(';');
+
+    const nameEl = document.createElement('div');
+    nameEl.textContent = isMe ? 'You go first!' : `${name} goes first!`;
+    nameEl.style.cssText = [
+      'font-size:clamp(26px,6.5vw,50px)', 'font-weight:900', 'color:#fff',
+      'text-shadow:0 0 22px rgba(255,215,80,.75)',
+      'letter-spacing:.04em',
+      'transform:scale(0.82)', 'transition:transform 0.22s cubic-bezier(.2,0,.3,1)',
+    ].join(';');
+
+    overlay.appendChild(suitsEl);
+    overlay.appendChild(nameEl);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      overlay.style.opacity  = '1';
+      nameEl.style.transform = 'scale(1)';
+    }));
+
+    setTimeout(() => {
+      overlay.style.transition = 'opacity 0.35s ease-out';
+      overlay.style.opacity    = '0';
+      setTimeout(() => { overlay.remove(); resolve(); }, 360);
+    }, 1600);
+  });
+}
+
 // ─── Turn timer ────────────────────────────────────────
 
 const TIMER_CIRC = 87.96; // 2π × r=14 (SVG circle in timer-ring)
@@ -2993,6 +3038,8 @@ function onRoomUpdate(s) {
       _playPhaseShown  = true;
       _prevMistakeSeq  = s.mistake?.seq   ?? -1;
       _prevPickupSeq   = s.lastPickup?.seq ?? -1;
+      const fp = s.players[s.currentPlayerIndex];
+      if (fp) firstPlayerAnnouncement(fp.name, s.currentPlayerIndex === myOnlineIndex);
     }
 
     // Classic Mode: detect a new mistake and show the MISTAKE overlay
@@ -3392,13 +3439,15 @@ function renderOnlineSwap() {
 
 // ─── Swap ready button ─────────────────────────────────
 
-document.getElementById('btn-swap-ready').onclick = function () {
+document.getElementById('btn-swap-ready').onclick = async function () {
   if (mode === 'local') {
     LG.phase = 'play';
     LG.currentPlayer = findFirstPlayer(LG.players);
     stageClear();
     showScreen('screen-game');
     renderLocalGame();
+    const fp = LG.players[LG.currentPlayer];
+    await firstPlayerAnnouncement(fp.name, LG.currentPlayer === 0);
     scheduleTurn();
   } else if (mode === 'online') {
     submitSwap();
