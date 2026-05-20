@@ -283,35 +283,146 @@ a { color: #7ec88a; }
 /* ═══════════════════════════════════════════════════════
    Online Lobby
    ═══════════════════════════════════════════════════════ */
-.online-split {
-  display: flex;
-  align-items: center;
-  gap: .7rem;
-  flex-wrap: wrap;
-}
-.join-row { display: flex; gap: .5rem; align-items: center; }
-.or-divider { color: #666; font-size: .82rem; white-space: nowrap; }
 
-#room-code-input {
-  width: 82px;
-  background: rgba(255,255,255,.08);
-  border: 1px solid #3a5a3e;
-  border-radius: 8px;
-  padding: .55rem .5rem;
-  color: #fff;
-  font-size: 1.1rem;
+/* Wider card to fit two action columns */
+.online-card { width: min(500px, 94vw); }
+
+/* ── Join/Create panel header ── */
+.online-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .28rem;
+  margin-bottom: .1rem;
+}
+.online-header-suits {
+  font-size: .88rem;
+  letter-spacing: .4em;
+  color: rgba(212,168,32,.4);
+  user-select: none;
+}
+.online-title {
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: .2em;
   text-transform: uppercase;
-  letter-spacing: .18rem;
+  background: linear-gradient(160deg, #f0d060 0%, #d4a820 50%, #e8c840 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+
+/* ── Two action cards side-by-side ── */
+.online-cards-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .85rem;
+}
+.online-action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .6rem;
+  border-radius: 14px;
+  padding: 1.2rem .9rem 1.1rem;
+  text-align: center;
+}
+.create-card {
+  background: linear-gradient(160deg, rgba(212,168,32,.11) 0%, rgba(212,168,32,.04) 100%);
+  border: 1px solid rgba(212,168,32,.30);
+}
+.join-card {
+  background: linear-gradient(160deg, rgba(74,122,82,.15) 0%, rgba(74,122,82,.05) 100%);
+  border: 1px solid rgba(74,122,82,.38);
+}
+.action-card-suits {
+  font-size: 1.45rem;
+  letter-spacing: .2em;
+  opacity: .50;
+  user-select: none;
+  line-height: 1;
+}
+.action-card-title {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgba(212,168,32,.75);
+}
+.join-card .action-card-title { color: #7ab87e; }
+.action-card-desc {
+  font-size: .73rem;
+  color: rgba(255,255,255,.38);
+  line-height: 1.45;
+  margin: 0;
+}
+.btn-block { width: 100%; }
+
+/* Code input inside join card — full width, big tracked letters */
+#room-code-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(74,122,82,.5);
+  border-radius: 8px;
+  padding: .55rem .4rem;
+  color: #fff;
+  font-size: 1.35rem;
+  text-transform: uppercase;
+  letter-spacing: .35rem;
   text-align: center;
   outline: none;
   min-height: 44px;
 }
+#room-code-input:focus { border-color: var(--gold); }
+#room-code-input::placeholder { letter-spacing: .2rem; opacity: .4; }
 
-.room-code-label  { font-size: 1rem; }
-.room-code-label strong { font-size: 1.55rem; letter-spacing: .2rem; color: var(--gold); }
-#lobby-player-list { display: flex; flex-direction: column; gap: .4rem; min-height: 56px; }
-.lobby-player { background: rgba(255,255,255,.07); border-radius: 7px; padding: .4rem .8rem; font-size: .9rem; }
-.lobby-player.host::after { content: ' 👑'; }
+/* Stack on very small phones */
+@media (max-width: 380px) { .online-cards-row { grid-template-columns: 1fr; } }
+
+/* ── Lobby panel ── */
+.lobby-code-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .22rem;
+  background: linear-gradient(160deg, rgba(212,168,32,.10) 0%, rgba(212,168,32,.04) 100%);
+  border: 1px solid rgba(212,168,32,.28);
+  border-radius: 14px;
+  padding: .9rem 1.6rem;
+}
+.lobby-code-eyebrow {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(212,168,32,.58);
+}
+.lobby-code-box strong {
+  font-size: 2.2rem;
+  letter-spacing: .4rem;
+  color: var(--gold);
+  text-shadow: 0 0 18px rgba(212,168,32,.28);
+  line-height: 1.1;
+}
+
+#lobby-player-list { display: flex; flex-direction: column; gap: .35rem; min-height: 52px; }
+.lobby-player {
+  display: flex;
+  align-items: center;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 9px;
+  padding: .42rem .85rem;
+  font-size: .9rem;
+  gap: .5rem;
+}
+.lobby-player.host {
+  border-color: rgba(212,168,32,.3);
+  background: rgba(212,168,32,.07);
+}
+.lobby-player.host::after { content: ' 👑'; margin-left: auto; }
 .lobby-status { font-size: .85rem; color: #99c09d; }
 
 /* ── Lobby timer control ────────────────────────────── */

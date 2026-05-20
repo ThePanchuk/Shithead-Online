@@ -74,25 +74,41 @@
 
   <!-- ─── ONLINE LOBBY ───────────────────────────────── -->
   <div id="screen-online" class="screen">
-    <div class="menu-card">
-      <h2>Online Multiplayer</h2>
+    <div class="menu-card online-card">
+
+      <!-- ── Join / Create panel ── -->
       <div id="online-join-panel">
+        <div class="online-header">
+          <div class="online-header-suits">♠ &nbsp; ♥ &nbsp; ♦ &nbsp; ♣</div>
+          <h2 class="online-title">Multiplayer</h2>
+        </div>
         <div class="form-group">
           <label>Your Name</label>
           <input type="text" id="online-name" value="Player" maxlength="15" autocomplete="off">
         </div>
-        <div class="online-split">
-          <button class="btn btn-primary" id="btn-create-room">+ Create Room</button>
-          <span class="or-divider">or join</span>
-          <div class="join-row">
+        <div class="online-cards-row">
+          <div class="online-action-card create-card">
+            <div class="action-card-suits">♠ ♣</div>
+            <div class="action-card-title">Create</div>
+            <p class="action-card-desc">Start a new room&nbsp;&amp; invite friends</p>
+            <button class="btn btn-primary btn-block" id="btn-create-room">+ Create Room</button>
+          </div>
+          <div class="online-action-card join-card">
+            <div class="action-card-suits">♥ ♦</div>
+            <div class="action-card-title">Join</div>
             <input type="text" id="room-code-input" placeholder="CODE" maxlength="4" autocomplete="off">
-            <button class="btn btn-secondary" id="btn-join-room">Join</button>
+            <button class="btn btn-secondary btn-block" id="btn-join-room">Join →</button>
           </div>
         </div>
-        <button class="btn btn-ghost mt-sm" id="btn-online-back">← Back</button>
+        <button class="btn btn-ghost" id="btn-online-back">← Back</button>
       </div>
+
+      <!-- ── Lobby waiting panel ── -->
       <div id="online-lobby-panel" class="hidden">
-        <div class="room-code-label">Room Code: <strong id="room-code-display">----</strong></div>
+        <div class="lobby-code-box">
+          <span class="lobby-code-eyebrow">Room Code</span>
+          <strong id="room-code-display">----</strong>
+        </div>
         <div id="lobby-player-list"></div>
 
         <!-- Timer control — visible to host in Classic Mode only -->
@@ -117,6 +133,7 @@
           <button class="btn btn-primary hidden" id="btn-start-online">Start Game →</button>
         </div>
       </div>
+
     </div>
   </div>
 
