@@ -384,8 +384,23 @@ a { color: #7ec88a; }
 #room-code-input:focus { border-color: var(--gold); }
 #room-code-input::placeholder { letter-spacing: .2rem; opacity: .4; }
 
-/* Stack on very small phones */
-@media (max-width: 380px) { .online-cards-row { grid-template-columns: 1fr; } }
+/* ── Mobile: phone breakpoint (≤480px) ── */
+@media (max-width: 480px) {
+  /* Reduce card gap to match the compressed menu-card */
+  .online-card { gap: 1.35rem; }
+  /* Stack Create / Join cards vertically on all phones */
+  .online-cards-row { grid-template-columns: 1fr; gap: .65rem; }
+  /* Tighter action card padding and smaller decorative text */
+  .online-action-card { padding: .85rem .75rem; gap: .4rem; }
+  .action-card-suits  { font-size: 1.15rem; }
+  .action-card-desc   { display: none; }   /* hide the description line on narrow screens */
+  .online-title       { font-size: 1.3rem; letter-spacing: .15em; }
+  .online-header-suits { font-size: .78rem; }
+  /* Lobby panel: stack columns, tighten code box */
+  .lobby-body { grid-template-columns: 1fr; }
+  .lobby-code-box { padding: .65rem 1rem; }
+  .lobby-code-box strong { font-size: 1.75rem; letter-spacing: .28rem; }
+}
 
 /* ── Lobby panel ── */
 .lobby-code-box {
@@ -558,8 +573,7 @@ a { color: #7ec88a; }
   margin-left: 1px;
 }
 
-/* Stack to single column on phones */
-@media (max-width: 480px) { .lobby-body { grid-template-columns: 1fr; } }
+/* (lobby-body stacks via the shared ≤480px block above) */
 
 /* ── Lobby timer control ────────────────────────────── */
 #lobby-timer-row { margin-top: .55rem; }
