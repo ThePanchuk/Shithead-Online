@@ -285,7 +285,7 @@ a { color: #7ec88a; }
    ═══════════════════════════════════════════════════════ */
 
 /* Wider card to fit two action columns */
-.online-card { width: min(500px, 94vw); }
+.online-card { width: min(500px, 94vw); gap: 1.9rem; }
 
 /* ── Join/Create panel header ── */
 .online-header {
