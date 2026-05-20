@@ -1941,8 +1941,7 @@ function startTimer(totalSeconds, isMyTurn, turnKey) {
 
   const endTime = Date.now() + totalSeconds * 1000;
 
-  display.classList.remove('hidden', 'my-turn', 'warning', 'urgent');
-  display.classList.toggle('my-turn', isMyTurn);
+  display.classList.remove('hidden', 'warning', 'urgent');
 
   function tick() {
     const remaining = Math.max(0, (endTime - Date.now()) / 1000);
