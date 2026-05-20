@@ -287,6 +287,12 @@ a { color: #7ec88a; }
 /* Wider card to fit two action columns */
 .online-card { width: min(500px, 94vw); gap: 1.9rem; }
 
+/* Join panel — flex column so gap takes effect */
+#online-join-panel { display: flex; flex-direction: column; gap: .7rem; }
+/* Extra breathing room before the action cards and before the back button */
+#online-join-panel .online-cards-row { margin-top: .45rem; }
+#online-join-panel #btn-online-back  { margin-top: .45rem; }
+
 /* ── Join/Create panel header ── */
 .online-header {
   display: flex;
