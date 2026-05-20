@@ -779,7 +779,9 @@ a { color: #7ec88a; }
   width: 100%;
   overflow-x: auto;
   /* extra top padding: --fan-pop for hover + 12px for rotated card corners (larger cards need a bit more) */
-  padding: calc(var(--fan-pop) + 12px) 20px 0;
+  /* horizontal padding must be large enough that tilted edge cards (≈22° max)
+     don't get clipped — visually they extend ~44% of card-height beyond their box */
+  padding: calc(var(--fan-pop) + 12px) calc(var(--hand-card-h) * 0.44) 0;
   /* centre the fan when it's narrower than the screen */
   display: flex;
   justify-content: center;
