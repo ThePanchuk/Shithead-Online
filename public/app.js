@@ -56,6 +56,10 @@ let _playPhaseShown   = false; // true once we've initialised _prevMistakeSeq fo
 // Pickup animation tracking
 let _prevPickupSeq    = -1;   // last seen pickup seq; -1 = not yet in play phase
 
+// Ten-loss animation tracking
+let _prevTenLossSeq   = -1;   // last seen ten-loss seq
+let _deferredTenLoss  = null; // { name, isMe, card, phase } — set when tenLoss fires during _fdFlipAnimating
+
 // Turn timer (Classic Mode online)
 let _timerHandle        = null;  // setTimeout for auto-timeout
 let _timerInterval      = null;  // setInterval for display
@@ -1961,6 +1965,77 @@ function firstPlayerAnnouncement(name, isMe) {
   });
 }
 
+// ─── Ten-loss animation ────────────────────────────────
+// Plays when a player's last face-down card is a 10.
+// Replaces the normal burn animation for this moment.
+function tenLossAnimation(playerName, isMe, card) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0',
+      'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
+      'background:rgba(0,0,0,0.82)',
+      'z-index:2000', 'pointer-events:none',
+      'opacity:0', 'transition:opacity 0.22s ease-out',
+    ].join(';');
+
+    // Card with fire glow
+    const cs     = getComputedStyle(document.documentElement);
+    const cw     = parseFloat(cs.getPropertyValue('--card-w')) || 64;
+    const ch     = parseFloat(cs.getPropertyValue('--card-h')) || 90;
+    const scale  = Math.min(2.5, (window.innerWidth * 0.32) / cw);
+    const cardEl = makeCardEl(card);
+    cardEl.style.cssText += [
+      `width:${(cw * scale) | 0}px`, `height:${(ch * scale) | 0}px`,
+      'pointer-events:none', 'flex-shrink:0',
+    ].join(';');
+
+    const cardWrap = document.createElement('div');
+    cardWrap.style.cssText = [
+      'filter:drop-shadow(0 0 18px #ff4400) drop-shadow(0 0 36px #ff1100) drop-shadow(0 0 70px rgba(255,30,0,.45))',
+      'transform:scale(0.5) rotate(-12deg)',
+      'transition:transform 0.38s cubic-bezier(.15,0,.2,1.5)',
+      'margin-bottom:22px',
+    ].join(';');
+    cardWrap.appendChild(cardEl);
+
+    const titleEl = document.createElement('div');
+    titleEl.textContent = isMe ? 'You are the Shithead!' : `${playerName} is the Shithead!`;
+    titleEl.style.cssText = [
+      'font-size:clamp(21px,5.5vw,42px)', 'font-weight:900', 'color:#ff3322',
+      'text-shadow:0 0 22px rgba(255,80,0,.9), 0 0 60px rgba(255,0,0,.4)',
+      'letter-spacing:.04em', 'text-align:center', 'padding:0 14px',
+      'opacity:0', 'transition:opacity 0.28s ease-out 0.18s',
+    ].join(';');
+
+    const subEl = document.createElement('div');
+    subEl.textContent = 'Finished on a 10 ♠';
+    subEl.style.cssText = [
+      'font-size:clamp(13px,3vw,20px)', 'color:#ff8844',
+      'margin-top:9px', 'letter-spacing:.07em',
+      'opacity:0', 'transition:opacity 0.28s ease-out 0.35s',
+    ].join(';');
+
+    overlay.appendChild(cardWrap);
+    overlay.appendChild(titleEl);
+    overlay.appendChild(subEl);
+    document.body.appendChild(overlay);
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      overlay.style.opacity    = '1';
+      cardWrap.style.transform = 'scale(1) rotate(0deg)';
+      titleEl.style.opacity    = '1';
+      subEl.style.opacity      = '1';
+    }));
+
+    setTimeout(() => {
+      overlay.style.transition = 'opacity 0.4s ease-out';
+      overlay.style.opacity    = '0';
+      setTimeout(() => { overlay.remove(); resolve(); }, 420);
+    }, 2400);
+  });
+}
+
 // ─── Turn timer ────────────────────────────────────────
 
 const TIMER_CIRC = 87.96; // 2π × r=14 (SVG circle in timer-ring)
@@ -2495,10 +2570,25 @@ async function botTakeTurn(botIdx) {
       }
       LG.pile = res.newPile;
       LG.sevenActive = useSevenRule ? res.newSevenActive : false;
-      localCheckFinished(botIdx);
-      applyLocalTurnChange(botIdx, res);
+
+      // Ten-loss: last face-down card was a 10 → instant shithead
+      const isBotTenLoss = didBurn && card.rank === '10' &&
+        p.hand.length === 0 && p.faceUp.length === 0 && p.faceDown.length === 0;
+      if (isBotTenLoss) {
+        LG.loserIndex = botIdx;
+        LG.phase = 'ended';
+      } else {
+        localCheckFinished(botIdx);
+        applyLocalTurnChange(botIdx, res);
+      }
     }
-    if (didBurn) await burnPileAnimation(computeBurnContext([card], botFdPileSnap));
+    if (didBurn && LG.loserIndex !== botIdx) await burnPileAnimation(computeBurnContext([card], botFdPileSnap));
+    if (LG.loserIndex === botIdx && LG.phase === 'ended' && card.rank === '10') {
+      renderLocalGame();
+      await tenLossAnimation(p.name, false, card);
+      showGameOver();
+      return;
+    }
     afterBotAction();
     return;
   }
@@ -2667,13 +2757,25 @@ async function humanPlayFaceDown(faceDownIdx, srcEl) {
     }
     LG.pile = res.newPile;
     LG.sevenActive = useSevenRule ? res.newSevenActive : false;
-    localCheckFinished(0);
-    localCheckGameOver();
-    if (LG.phase !== 'ended') applyLocalTurnChange(0, res);
+
+    // Ten-loss: last face-down card was a 10 → instant shithead
+    const isTenLoss = didBurn && card.rank === '10' &&
+      p.hand.length === 0 && p.faceUp.length === 0 && p.faceDown.length === 0;
+    if (isTenLoss) {
+      LG.loserIndex = 0;
+      LG.phase = 'ended';
+    } else {
+      localCheckFinished(0);
+      localCheckGameOver();
+      if (LG.phase !== 'ended') applyLocalTurnChange(0, res);
+    }
   }
-  if (didBurn) await burnPileAnimation(computeBurnContext([card], pileSnapshot));
+  if (didBurn && LG.loserIndex !== 0) await burnPileAnimation(computeBurnContext([card], pileSnapshot));
   stageClear();
   renderLocalGame();
+  if (LG.loserIndex === 0 && LG.phase === 'ended' && card.rank === '10') {
+    await tenLossAnimation(p.name, true, card);
+  }
   if (LG.phase === 'ended') showGameOver();
   else scheduleTurn();
 }
@@ -2886,6 +2988,8 @@ function stopRoom() {
   clearTimer();
   _timerLastPlayerIdx = -1;
   _timerTurnCount     = 0;
+  _prevTenLossSeq     = -1;
+  _deferredTenLoss    = null;
 }
 
 // ─── Create / Join ─────────────────────────────────────
@@ -3038,6 +3142,7 @@ function onRoomUpdate(s) {
       _playPhaseShown  = true;
       _prevMistakeSeq  = s.mistake?.seq   ?? -1;
       _prevPickupSeq   = s.lastPickup?.seq ?? -1;
+      _prevTenLossSeq  = s.tenLoss?.seq    ?? -1;
       const fp = s.players[s.currentPlayerIndex];
       if (fp) firstPlayerAnnouncement(fp.name, s.currentPlayerIndex === myOnlineIndex);
     }
@@ -3053,6 +3158,25 @@ function onRoomUpdate(s) {
         if (_lastOnlineState) renderOnlineGame(_lastOnlineState);
       });
       // renderOnlineGame below will detect _mistakeAnimating and only cache state
+    }
+
+    // Ten-loss detection — absorb the burn so renderOnlineGame doesn't also fire it
+    const newTenLossSeq = s.tenLoss?.seq ?? -1;
+    let tenLossHandled  = false;
+    if (newTenLossSeq > _prevTenLossSeq) {
+      _prevTenLossSeq = newTenLossSeq;
+      _prevOnlineBurnCount = (s.burnedPile || []).length; // suppress normal burn animation
+      const tlP  = s.players[s.tenLoss.playerIdx];
+      const tlData = { name: tlP?.name || '?', isMe: s.tenLoss.playerIdx === myOnlineIndex,
+                       card: s.tenLoss.card };
+      tenLossHandled = true;
+      if (_fdFlipAnimating) {
+        // Defer: the playing client is mid-flip; fbPlayFaceDown Step 2 will handle it
+        _deferredTenLoss = tlData;
+      } else {
+        tenLossAnimation(tlData.name, tlData.isMe, tlData.card)
+          .then(() => showGameOver());
+      }
     }
 
     renderOnlineGame(OG);
@@ -3084,7 +3208,7 @@ function onRoomUpdate(s) {
       pickupAnimation(isMe ? 'You' : pickedUpName, s.lastPickup.pileCount, isMe);
     }
 
-    if (s.phase === 'ended') setTimeout(showGameOver, 800);
+    if (s.phase === 'ended' && !tenLossHandled) setTimeout(showGameOver, 800);
   }
 }
 
@@ -3101,7 +3225,7 @@ async function startOnlineGame() {
       phase: 'swap', deck: dealt.remainingDeck,
       gameMode: d.gameMode || 'pathetic',
       pile: [], burnedPile: [], sevenActive: false, direction: 1, finishCounter: 1, loserIndex: null,
-      mistake: null, lastPlayerIdx: null, burnCause: null, lastPickup: null,
+      mistake: null, lastPlayerIdx: null, burnCause: null, lastPickup: null, tenLoss: null,
       lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
       players: d.players.map((p, i) => ({
         ...p, swapReady: false, finished: false, finishOrder: null,
@@ -3371,20 +3495,31 @@ async function fbPlayFaceDown(index, srcEl) {
         const next = onlineNextIdx(players, myOnlineIndex, res, dir);
         idx = next.idx; dir = next.dir;
       }
+      // Ten-loss: last face-down card was a 10 → instant shithead
+      const isTenLoss = wasPlayable && res.burned && card.rank === '10' &&
+        !me.hand.length && !me.faceUp.length && !me.faceDown.length;
+
       let finishCounter = s.finishCounter || 1;
       if (!me.finished && !me.hand.length && !me.faceUp.length && !me.faceDown.length) {
-        me.finished = true; me.finishOrder = finishCounter++;
+        me.finished = true;
+        if (!isTenLoss) me.finishOrder = finishCounter++; // no finish order for ten-loss
       }
       const active = players.filter(p => !p.finished);
+      const tenLossData = isTenLoss
+        ? { playerIdx: myOnlineIndex, seq: (s.tenLoss?.seq ?? -1) + 1,
+            card: { rank: card.rank, suit: card.suit, id: card.id, value: card.value } }
+        : (s.tenLoss || null);
       t.update(roomRef(currentRoomCode), {
         players, pile, burnedPile, sevenActive, direction: dir, currentPlayerIndex: idx, finishCounter,
-        burnCause,
+        burnCause: isTenLoss ? null : burnCause, // tenLoss animation handles the burn
+        tenLoss: tenLossData,
         ...(isClassic ? { lastPlayerIdx: wasPlayable ? myOnlineIndex : null } : {}),
         lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
-        phase:      active.length <= 1 ? 'ended' : s.phase,
-        loserIndex: active.length === 1 ? players.indexOf(active[0]) : s.loserIndex
+        phase:      (isTenLoss || active.length <= 1) ? 'ended' : s.phase,
+        loserIndex: isTenLoss ? myOnlineIndex :
+                    (active.length === 1 ? players.indexOf(active[0]) : s.loserIndex)
       });
-      return { card, wasPlayable, burned: !!res.burned, burnCause };
+      return { card, wasPlayable, burned: !!res.burned, burnCause: isTenLoss ? null : burnCause, isTenLoss };
     });
   } catch(e) { toast('Move failed: ' + e.message); return; }
 
@@ -3398,7 +3533,7 @@ async function fbPlayFaceDown(index, srcEl) {
     flyCardsToPile([result.card], [centerRect]);
   }
 
-  if (result.burned) {
+  if (result.burned && !result.isTenLoss) {
     // Prevent renderOnlineGame's burn-count detector from double-firing
     if (_lastOnlineState) {
       _prevOnlineBurnCount = (_lastOnlineState.burnedPile || []).length;
@@ -3407,7 +3542,18 @@ async function fbPlayFaceDown(index, srcEl) {
   }
 
   _fdFlipAnimating = false;
-  if (_lastOnlineState) renderOnlineGame(_lastOnlineState);
+
+  // Check for deferred ten-loss (onRoomUpdate set it while _fdFlipAnimating was true)
+  if (_deferredTenLoss) {
+    const tl = _deferredTenLoss;
+    _deferredTenLoss = null;
+    if (_lastOnlineState) _prevOnlineBurnCount = (_lastOnlineState.burnedPile || []).length;
+    await tenLossAnimation(tl.name, tl.isMe, tl.card);
+    showGameOver();
+  } else if (_lastOnlineState) {
+    renderOnlineGame(_lastOnlineState);
+    if (_lastOnlineState.phase === 'ended') setTimeout(showGameOver, 800);
+  }
 }
 
 // ─── Online swap rendering ─────────────────────────────
