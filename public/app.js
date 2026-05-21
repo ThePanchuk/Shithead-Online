@@ -1784,7 +1784,25 @@ function flipFaceDownAnimation(card, startRect) {
 // ═══════════════════════════════════════════════════════
 //  Classic Mode — MISTAKE overlay (shown to all players)
 // ═══════════════════════════════════════════════════════
+const MISTAKE_VARIANTS = [
+  { text: 'MISTAKE!',        color: '#ff2222', glow: 'rgba(255,60,0,.95),0 0 60px rgba(255,0,0,.55)'    },
+  { text: 'SO BAD…',         color: '#ff4400', glow: 'rgba(255,80,0,.95),0 0 60px rgba(255,60,0,.55)'   },
+  { text: '😢',              color: '#ff2222', glow: 'rgba(255,60,0,.95),0 0 60px rgba(255,0,0,.55)'    },
+  { text: 'HOW UNFORTUNATE', color: '#cc44ff', glow: 'rgba(160,0,255,.9),0 0 60px rgba(180,0,255,.5)'   },
+  { text: 'HAHAHAHAHA',      color: '#ffdd00', glow: 'rgba(255,200,0,.95),0 0 60px rgba(255,180,0,.5)'  },
+  { text: 'YIKES!',          color: '#ff6600', glow: 'rgba(255,100,0,.95),0 0 60px rgba(255,80,0,.55)'  },
+  { text: 'OH NO…',          color: '#ff2222', glow: 'rgba(255,60,0,.95),0 0 60px rgba(255,0,0,.55)'    },
+  { text: 'EMBARRASSING',    color: '#ff44aa', glow: 'rgba(255,0,150,.9),0 0 60px rgba(255,0,100,.5)'   },
+  { text: 'ROOKIE ERROR',    color: '#ff2222', glow: 'rgba(255,60,0,.95),0 0 60px rgba(255,0,0,.55)'    },
+  { text: 'LMAOOOO',         color: '#ffdd00', glow: 'rgba(255,200,0,.95),0 0 60px rgba(255,180,0,.5)'  },
+  { text: 'NOT GREAT…',      color: '#ff6600', glow: 'rgba(255,100,0,.95),0 0 60px rgba(255,80,0,.55)'  },
+  { text: 'WOMP WOMP',       color: '#cc44ff', glow: 'rgba(160,0,255,.9),0 0 60px rgba(180,0,255,.5)'   },
+  { text: 'TRY AGAIN 🙃',    color: '#ff44aa', glow: 'rgba(255,0,150,.9),0 0 60px rgba(255,0,100,.5)'   },
+  { text: 'OOPSIE',          color: '#ffdd00', glow: 'rgba(255,200,0,.95),0 0 60px rgba(255,180,0,.5)'  },
+];
+
 function mistakeAnimation(playerName) {
+  const variant = MISTAKE_VARIANTS[Math.floor(Math.random() * MISTAKE_VARIANTS.length)];
   return new Promise(resolve => {
     const overlay = document.createElement('div');
     overlay.style.cssText = [
@@ -1798,12 +1816,12 @@ function mistakeAnimation(playerName) {
     ].join(';');
 
     const titleEl = document.createElement('div');
-    titleEl.textContent = 'MISTAKE!';
+    titleEl.textContent = variant.text;
     titleEl.style.cssText = [
       'font-size:clamp(52px,13vw,96px)',
       'font-weight:900',
-      'color:#ff2222',
-      'text-shadow:0 0 28px rgba(255,60,0,.95),0 0 60px rgba(255,0,0,.55)',
+      `color:${variant.color}`,
+      `text-shadow:0 0 28px ${variant.glow}`,
       'letter-spacing:.06em',
       'transform:scale(0.75)',
       'transition:transform 0.18s cubic-bezier(.2,0,.3,1)',
