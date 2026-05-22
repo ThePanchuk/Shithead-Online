@@ -3222,13 +3222,17 @@ function onRoomUpdate(s) {
       }
     }
 
+    // Detect pile burn BEFORE renderOnlineGame updates _prevOnlineBurnCount
+    const pileJustBurned = _prevOnlineBurnCount >= 0 &&
+                           (s.burnedPile || []).length > _prevOnlineBurnCount;
+
     renderOnlineGame(OG);
 
     // Turn timer
     if (s.timerEnabled && (s.timerSeconds || 0) > 0 && s.phase === 'play') {
       const activeP = s.players[s.currentPlayerIndex];
       if (activeP && !activeP.finished) {
-        if (s.currentPlayerIndex !== _timerLastPlayerIdx) {
+        if (s.currentPlayerIndex !== _timerLastPlayerIdx || pileJustBurned) {
           _timerLastPlayerIdx = s.currentPlayerIndex;
           _timerTurnCount++;
           startTimer(s.timerSeconds, s.currentPlayerIndex === myOnlineIndex,
