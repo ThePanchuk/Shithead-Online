@@ -2257,9 +2257,21 @@ function stageRemove(card) {
   }
   const idx = selectedCards.findIndex(c => c.id === card.id);
   if (idx >= 0) selectedCards.splice(idx, 1);
-  // Restore the hand ghost
+  // Restore the hand ghost + its click handler.
+  // During render, isStaged=true suppresses the onclick branch, so the element
+  // has no handler. Re-attach it now so the card is immediately re-selectable.
   const handEl = document.querySelector(`#human-hand [data-id="${card.id}"]`);
-  if (handEl) handEl.classList.remove('staged-out');
+  if (handEl) {
+    handEl.classList.remove('staged-out');
+    if (mode === 'online') {
+      handEl.onclick = () => onlineToggleSelect(card);
+    } else if (mode === 'local' && LG && LG.currentPlayer === 0) {
+      const h = LG.players[0];
+      if (!h.finished && localPlayerPhase(h) === 'hand') {
+        handEl.onclick = () => toggleSelectCard(card, 'hand');
+      }
+    }
+  }
   if (selectedCards.length === 0) {
     stageHide();
     document.getElementById('btn-play-selected').classList.add('btn-action-dim');
