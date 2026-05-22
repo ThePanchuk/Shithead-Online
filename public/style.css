@@ -795,8 +795,9 @@ a { color: #7ec88a; }
 .hand-fan {
   display: flex;
   align-items: flex-end;
-  flex-shrink: 0;   /* never compress the fan */
-  margin: 0 auto;   /* centres the fan when narrower than the scroll container */
+  flex-shrink: 0;        /* never compress the fan */
+  width: max-content;    /* shrink-wrap to card content so margin:auto can centre it */
+  margin: 0 auto;        /* centres the fan when narrower than the scroll container */
 }
 
 /* Every card except the first overlaps the previous one */
