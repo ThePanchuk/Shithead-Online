@@ -3113,6 +3113,7 @@ function toRenderState(s) {
 
 function onRoomUpdate(s) {
   if (s.phase === 'lobby') {
+    showScreen('screen-online');
     document.getElementById('room-code-display').textContent = s.code;
     document.getElementById('online-join-panel').classList.add('hidden');
     document.getElementById('online-lobby-panel').classList.remove('hidden');
@@ -3961,9 +3962,55 @@ document.getElementById('btn-go-again').onclick = () => {
     LG = null; stageClear();
     showScreen('screen-local-setup');
   } else {
-    stopRoom();
-    LG = null; OG = null; mode = null; myOnlineIndex = null; stageClear();
-    showScreen('screen-menu');
+    // Reset all game-phase local state, but stay connected to the same room
+    LG = null; OG = null; stageClear();
+    _swapShown = false;
+    _swapDragCleanup();
+    _deckDragCleanup();
+    _prevOnlineBurnCount = -1;
+    _prevMistakeSeq      = -1;
+    _prevPickupSeq       = -1;
+    _mistakeAnimating    = false;
+    _playPhaseShown      = false;
+    _fdFlipAnimating     = false;
+    clearTimer();
+    _timerLastPlayerIdx  = -1;
+    _timerTurnCount      = 0;
+    _prevTenLossSeq      = -1;
+    _deferredTenLoss     = null;
+    _prevOnlineState     = null;
+
+    // Show lobby screen immediately for all players
+    showScreen('screen-online');
+    document.getElementById('online-join-panel').classList.add('hidden');
+    document.getElementById('online-lobby-panel').classList.remove('hidden');
+
+    if (myOnlineIndex === 0 && currentRoomCode) {
+      // Host resets the Firestore room back to lobby phase
+      (async () => {
+        try {
+          const snap = await roomRef(currentRoomCode).get();
+          if (snap.exists) {
+            const d = snap.data();
+            await roomRef(currentRoomCode).update({
+              phase: 'lobby',
+              pile: [], burnedPile: [], deck: [],
+              sevenActive: false, direction: 1,
+              loserIndex: null, mistake: null, lastPlayerIdx: null,
+              burnCause: null, lastPickup: null, tenLoss: null,
+              lastActivity: firebase.firestore.FieldValue.serverTimestamp(),
+              players: d.players.map(p => ({
+                name: p.name, idx: p.idx,
+                finished: false, finishOrder: null,
+                swapReady: false, hand: [], faceUp: [], faceDown: []
+              }))
+            });
+            // onRoomUpdate(phase:'lobby') fires for all players and updates the lobby UI
+          }
+        } catch(e) { toast('Could not return to lobby: ' + e.message); }
+      })();
+    }
+    // Non-host players: lobby UI updated via onRoomUpdate when host resets
   }
 };
 
