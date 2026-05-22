@@ -2697,7 +2697,7 @@ function renderLocalGame() {
   handZone.innerHTML = '';
   const displayHand = sortedHand(human.hand);
   const handN = displayHand.length;
-  const fanSpread = Math.min(44, handN * 5);
+  const fanSpread = calcFanSpread(handN);
   displayHand.forEach((card, i) => {
     const isStaged = selectedCards.some(c => c.id === card.id);
     const canPlay  = isMyTurn && humanPhase === 'hand' && isCardPlayable(card, LG.pile, LG.sevenActive);
@@ -2712,6 +2712,7 @@ function renderLocalGame() {
     el.style.zIndex = i + 1;
     handZone.appendChild(el);
   });
+  updateFanPadding();
 
   const btnPlay   = document.getElementById('btn-play-selected');
   const btnPickup = document.getElementById('btn-pickup');
@@ -3712,7 +3713,7 @@ function renderOnlineGame(state) {
   handZone.innerHTML = '';
   const displayHand = sortedHand(state.hand);
   const handN = displayHand.length;
-  const fanSpread = Math.min(44, handN * 5);
+  const fanSpread = calcFanSpread(handN);
   displayHand.forEach((card, i) => {
     const isStaged  = selectedCards.some(c => c.id === card.id);
     const handClickable = isClassic
@@ -3732,6 +3733,7 @@ function renderOnlineGame(state) {
     el.style.zIndex = i + 1;
     handZone.appendChild(el);
   });
+  updateFanPadding();
 
   // Button visibility: Classic Mode removes the turn requirement
   const canAct = isClassic
@@ -4078,6 +4080,36 @@ document.addEventListener('keydown', e => {
   }, { passive: false });
 })();
 
+// ─── Hand fan helpers ─────────────────────────────────
+
+// Option A: fan spread grows quickly up to 8 cards, then slows down.
+// This keeps the edge-card tilt moderate when the hand is large.
+function calcFanSpread(handN) {
+  if (handN <= 1) return 0;
+  if (handN <= 8) return handN * 5;                        // 5° … 40°
+  return Math.min(44, 40 + (handN - 8) * 0.5);            // 40.5° … 44°
+}
+
+// Option D: compute the exact horizontal padding needed so that the
+// outermost rotated card corners never clip against the scroll container.
+// Formula: for a card of width W and height H rotated by θ around its
+// bottom-centre, the top corner's horizontal offset beyond the card box is:
+//   extra = W/2 × (1 − cos θ) + H × sin θ
+function updateFanPadding() {
+  const scrollEl = document.querySelector('.hand-fan-scroll');
+  if (!scrollEl) return;
+  const handN = document.querySelectorAll('#human-hand .card').length;
+  if (handN === 0) return;
+  const cs     = getComputedStyle(document.documentElement);
+  const cardH  = parseFloat(cs.getPropertyValue('--card-h'))  * 1.69;
+  const cardW  = parseFloat(cs.getPropertyValue('--card-w'))  * 1.69;
+  const fanPop = parseFloat(cs.getPropertyValue('--fan-pop'));
+  if (!cardH || !cardW || !fanPop) return;
+  const θ       = (calcFanSpread(handN) / 2) * (Math.PI / 180);
+  const horizPad = Math.ceil(cardW / 2 * (1 - Math.cos(θ)) + cardH * Math.sin(θ)) + 10;
+  scrollEl.style.padding = `${fanPop + 12}px ${horizPad}px 0`;
+}
+
 // ─── Hand fan scroll-overflow fade hints ──────────────
 (function setupHandScrollHints() {
   const scrollEl = document.querySelector('.hand-fan-scroll');
@@ -4097,6 +4129,6 @@ document.addEventListener('keydown', e => {
   scrollEl.addEventListener('scroll', updateHints, { passive: true });
 
   // Update whenever cards are added/removed from the hand fan
-  new MutationObserver(() => setTimeout(updateHints, 30))
+  new MutationObserver(() => setTimeout(() => { updateHints(); updateFanPadding(); }, 30))
     .observe(document.getElementById('human-hand'), { childList: true });
 })();
