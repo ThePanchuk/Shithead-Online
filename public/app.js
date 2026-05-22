@@ -1819,6 +1819,7 @@ function mistakeAnimation(playerName) {
       `color:${variant.color}`,
       `text-shadow:0 0 28px ${variant.glow}`,
       'letter-spacing:.06em',
+      'white-space:nowrap',
       'transform:scale(0.75)',
       'transition:transform 0.18s cubic-bezier(.2,0,.3,1)',
       'animation:mistake-shake .55s ease-in-out .18s both',
@@ -1839,11 +1840,21 @@ function mistakeAnimation(playerName) {
     overlay.appendChild(nameEl);
     document.body.appendChild(overlay);
 
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      overlay.style.opacity  = '1';
-      titleEl.style.transform = 'scale(1)';
-      nameEl.style.opacity    = '1';
-    }));
+    requestAnimationFrame(() => {
+      // Measure natural text width (scrollWidth ignores CSS transforms).
+      // Squeeze horizontally if wider than 88% of the screen, keeping
+      // the vertical pop-in animation intact on the Y axis.
+      const fitScaleX = titleEl.scrollWidth > window.innerWidth * 0.88
+        ? (window.innerWidth * 0.88) / titleEl.scrollWidth
+        : 1;
+      titleEl.style.transform = `scaleX(${fitScaleX}) scaleY(0.75)`;
+
+      requestAnimationFrame(() => {
+        overlay.style.opacity   = '1';
+        titleEl.style.transform = `scaleX(${fitScaleX}) scaleY(1)`;
+        nameEl.style.opacity    = '1';
+      });
+    });
 
     setTimeout(() => {
       overlay.style.transition = 'opacity 0.3s ease-out';
