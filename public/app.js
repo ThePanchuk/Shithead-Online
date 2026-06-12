@@ -3778,12 +3778,17 @@ function renderOnlineGame(state) {
 
   const oArea = document.getElementById('opponents-area');
   oArea.innerHTML = '';
-  state.players.forEach((p, i) => {
-    if (i === state.myIndex) return;
+  // Render opponents in clockwise seating order starting from the player
+  // immediately after the human — so left→right in the strip matches the
+  // play order the human experiences around the table.
+  const n = state.players.length;
+  for (let step = 1; step < n; step++) {
+    const i = (state.myIndex + step) % n;
+    const p = state.players[i];
     const slotEl = buildOpponentSlot(p, i === state.currentPlayerIndex, p.faceDownCount, p.faceUp, p.handCount);
     slotEl.dataset.idx = i;   // used by the fly-animation detector above
     oArea.appendChild(slotEl);
-  });
+  }
 
   // Fire the fly animation now that the DOM (pile, opponents) is up to date
   if (_pendingFlyCards && _pendingFlySrc) {
