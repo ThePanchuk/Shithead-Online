@@ -12,6 +12,25 @@ jobs:
     steps:
       - name: 🚚 Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 100
+
+      - name: 📝 Export patch notes for the portfolio
+        run: |
+          python3 - <<'EOF'
+          import json, re, subprocess
+          SKIP = re.compile(r'^(merge\b|docs?\b|wip\b|readme\b|chore\b)|\(docs/|\bdocs/[\w.-]+\.md\b|\bclaude\b|agents\.md', re.I)
+          log = subprocess.run(['git', 'log', '-n', '100', '--no-merges', '--abbrev=7', '--format=%h%x1f%cI%x1f%s'],
+                               capture_output=True, text=True, check=True).stdout
+          notes = []
+          for line in log.splitlines():
+              sha, date, msg = line.split('\x1f', 2)
+              if not SKIP.search(msg):
+                  notes.append({'hash': sha, 'msg': msg, 'date': date})
+          with open('public/patchnotes.json', 'w', encoding='utf-8') as f:
+              json.dump(notes[:5], f, ensure_ascii=False, indent=2)
+          print(f'{len(notes[:5])} patch notes written')
+          EOF
 
       - name: 🚀 Deploy to IONOS via SFTP
         env:

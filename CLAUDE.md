@@ -64,6 +64,14 @@ IONOS is **SFTP-only** — no SSH shell. Deploy uses `lftp` with
 `sftp:connect-program "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"`.
 `wlixcc/SFTP-Deploy-Action` is broken on current GitHub runners — do not use it.
 
+Commit titles become public patch notes: before the upload, the workflow step
+"Export patch notes" writes the 5 newest commit titles to `public/patchnotes.json`
+(→ https://thepanchuk.com/shithead/patchnotes.json), and the portfolio shows them
+as patch notes and in its ticker, even though the repo is private. Write the first
+line for players: English, under 80 characters, nothing confidential. Merges and
+commits starting with `docs`, `readme`, `chore` or `wip`, or mentioning `docs/…`,
+`CLAUDE` or `AGENTS.md`, are filtered out. Keep `fetch-depth: 100` on the checkout.
+
 ## Firebase
 - Project: `claude-cd59e`
 - Database: `(default)` in `europe-west3`
