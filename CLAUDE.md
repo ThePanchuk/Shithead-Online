@@ -72,6 +72,12 @@ line for players: English, under 80 characters, nothing confidential. Merges and
 commits starting with `docs`, `readme`, `chore` or `wip`, or mentioning `docs/…`,
 `CLAUDE` or `AGENTS.md`, are filtered out. Keep `fetch-depth: 100` on the checkout.
 
+Portfolio screenshots live in `portfolio/previews/shithead1.png` … (PNG,
+1600 × 1000, 16:10; image 1 is the main menu and the card preview on
+thepanchuk.com). The workflow step "Replace portfolio screenshots" uploads them
+to `/dist/images/previews/` and deletes any `shithead<digit>.png` there that is
+no longer in the repo.
+
 ## Firebase
 - Project: `claude-cd59e`
 - Database: `(default)` in `europe-west3`

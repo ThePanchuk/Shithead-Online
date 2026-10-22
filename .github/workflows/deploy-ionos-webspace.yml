@@ -48,3 +48,31 @@ jobs:
             mirror --reverse --no-perms --parallel=4 ./public/ /dist/shithead/;
             bye
           "
+
+      - name: 🖼️ Replace portfolio screenshots
+        if: hashFiles('portfolio/previews/*.png') != ''
+        env:
+          FTP_HOST: ${{ secrets.FTP_SERVER }}
+          FTP_USER: ${{ secrets.FTP_USERNAME }}
+          FTP_PASS: ${{ secrets.FTP_PASSWORD }}
+          SLUG: shithead
+        run: |
+          # Uploads portfolio/previews/<slug>1.png … and deletes this project's numbered
+          # screenshots on the server that are no longer in the repo. The folder holds every
+          # project's previews, so only <slug><one digit>.png is ever touched.
+          command -v lftp >/dev/null || sudo apt-get install -y lftp
+          stale=""
+          for n in 1 2 3 4 5 6 7 8 9; do
+            [ -f "portfolio/previews/$SLUG$n.png" ] || stale="$stale rm -f /dist/images/previews/$SLUG$n.png;"
+          done
+          lftp -c "
+            set sftp:auto-confirm yes;
+            set sftp:connect-program \"ssh -a -x -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\";
+            set net:timeout 15;
+            set net:max-retries 3;
+            open -u \"$FTP_USER\",\"$FTP_PASS\" sftp://\"$FTP_HOST\";
+            $stale
+            set cmd:fail-exit yes;
+            mput -O /dist/images/previews/ portfolio/previews/$SLUG[0-9].png;
+            bye
+          "
